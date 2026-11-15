@@ -9,9 +9,9 @@
   <script>
     // shortcut: paths are hardcoded to the /desk-widgets/ project-site prefix, because a 404 is
     // served at any depth so relative paths cannot work; revisit if the site moves to its own domain.
-    // A widget approved since the last run of tools/build-widget-pages.mjs has no /w/<id>/ page
-    // yet, and Explore links there. Send those visitors to the page that works for any widget,
-    // rather than showing them a dead end. Same id rule as isValidId in assets/site.js.
+    // A link to a widget's page that is not there (removed, or mistyped) goes to the page that
+    // answers for any id and can say so, rather than a dead end. Same id rule as isValidId in
+    // assets/site.js.
     var m = location.pathname.match(/\/w\/(u\.[a-z0-9-]+\.[a-z0-9-]+)\/?$/);
     if (m) location.replace("/desk-widgets/widget.html?id=" + encodeURIComponent(m[1]));
   </script>

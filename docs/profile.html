@@ -30,8 +30,8 @@
   </main>
 
   <script type="module">
-    import { nav, el, artFrom, avatar, notice, widgetCard, me } from "./assets/site.js";
-    import { available, getProfile, getWidgets, getPreviews, getMyVersions, getPhoto } from "./assets/data.js";
+    import { nav, el, artFrom, avatar, notice, widgetCard, isAuthor } from "./assets/site.js";
+    import { getProfile, getWidgets, getPreviews } from "./assets/data.js";
 
     nav(null);
     const page = document.getElementById("page");
@@ -53,37 +53,17 @@
     }
 
     async function load() {
-      if (!username || !/^[a-z0-9-]{2,24}$/.test(username)) {
+      if (!isAuthor(username)) {
         head.hidden = true;
         page.replaceChildren(notice("This link doesn't point to a profile.", true));
         return;
       }
-      if (!available) { head.hidden = true; page.replaceChildren(notice("The community gallery isn't connected yet.")); return; }
       try {
-        const [author, widgets, who] = await Promise.all([
-          getProfile(username), getWidgets(), me().catch(() => null),
-        ]);
+        const [author, widgets] = await Promise.all([getProfile(username), getWidgets()]);
         if (!author) return notFound();
 
-        const owner = Boolean(who && who.profile && who.profile.username === username);
-        const approved = (widgets || []).filter((w) => w.author === username);
-
-        const [versions, previews] = await Promise.all([
-          owner ? getMyVersions().catch(() => []) : Promise.resolve([]),
-          getPreviews(approved, "assets/img/").catch(() => new Map()),
-        ]);
-
-        const latest = new Map();
-        const pending = [];
-        if (owner) {
-          for (const v of versions || []) if (!latest.has(v.widget_id)) latest.set(v.widget_id, v);
-          const published = new Set(approved.map((w) => w.id));
-          for (const [id, v] of latest) {
-            if (v.status === "approved" || published.has(id)) continue;
-            pending.push({ id, name: v.name, category: v.category, version: v.version,
-              author: username, status: v.status });
-          }
-        }
+        const theirs = widgets.filter((w) => w.author === username);
+        const previews = await getPreviews(theirs);
 
         meta(author.username + " · Desk Widgets", author.bio || "Widgets by " + author.username);
 
@@ -91,42 +71,25 @@
         head.replaceChildren(
           avatar(author, 112),
           el("h1", { class: "pf-name" }, author.username),
-          el("p", { class: "pf-count" }, approved.length + " widget" + (approved.length !== 1 ? "s" : "")),
+          el("p", { class: "pf-count" }, theirs.length + " widget" + (theirs.length !== 1 ? "s" : "")),
           author.bio ? el("p", { class: "pf-bio" }, author.bio) : null,
-          owner ? el("div", { class: "pf-actions" },
-            el("a", { class: "button grey", href: "account.html" }, "Edit Profile"),
-            el("a", { class: "more", href: "upload.html" }, "Upload a widget")) : null);
+          author.github ? el("div", { class: "pf-actions" },
+            el("a", { class: "more", href: "https://github.com/" + encodeURIComponent(author.github), rel: "noreferrer" }, "GitHub")) : null);
         const img = head.querySelector("img.avatar");
         if (img) img.alt = author.username;
-        // The photo itself (sharper at this size, and it may be animated) arrives on its own
-        // and replaces the small copy; the page never waits for it.
-        getPhoto(username).then((photo) => {
-          if (!photo) return;
-          const full = avatar({ username, avatar: photo }, 112);
-          full.alt = author.username;
-          head.querySelector(".avatar").replaceWith(full);
-        }).catch(() => {});
 
-        const shown = [...approved, ...pending];
-        const grid = shown.length
-          ? el("div", { class: "explore-grid", style: "margin-top: 28px" })
-          : el("p", { class: "pf-empty" }, owner ? "You haven't published any widgets yet. " : username + " hasn't published any widgets yet.",
-              owner ? el("a", { class: "more", href: "upload.html" }, "Upload your first widget") : null);
+        const grid = theirs.length
+          ? el("div", { class: "explore-grid", style: "margin-top: 28px" },
+              theirs.map((w) => widgetCard(w, artFrom(previews.get(w.id) || null, w.name, w.category), { author: false })))
+          : el("p", { class: "pf-empty" }, username + " hasn't published any widgets yet.");
 
         page.replaceChildren(
           el("div", { class: "head-row ruled" },
             el("h2", { class: "explore-head" }, "Widgets"),
             el("p", { class: "head-note" }, "Get opens Desk Widgets, which verifies the widget and asks before installing.")),
           grid);
-
-        if (!shown.length) return;
-        grid.replaceChildren(...shown.map((w) => {
-          const newest = latest.get(w.id);
-          const status = w.status || (newest && newest.status !== "approved" ? newest.status : undefined);
-          return widgetCard(w, artFrom(previews.get(w.id) || null, w.name, w.category),
-            { author: false, status });
-        }));
       } catch (e) {
+        head.hidden = true;
         page.replaceChildren(notice("This page couldn't load. Check your connection and reload.", true));
       }
     }

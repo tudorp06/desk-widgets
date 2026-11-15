@@ -8,12 +8,11 @@
   <link rel="stylesheet" href="assets/site.css">
   <link rel="modulepreload" href="assets/site.js">
   <link rel="modulepreload" href="config.js">
-  <link rel="modulepreload" href="assets/data.js">
 </head>
 <body>
   <main class="content narrow section">
     <h1 class="t-large">Privacy</h1>
-    <p class="t-reduced">Last updated 10 November 2026.</p>
+    <p class="t-reduced">Last updated 15 November 2026.</p>
 
     <p>The Desk Widgets app has no analytics, no telemetry and no crash reporting. Nothing is
     sent anywhere to tell us that you installed it, opened it or used it. There is no account to
@@ -87,20 +86,25 @@
         what.</div></div></div>
     </div>
 
-    <h2 class="block">If you make an account</h2>
+    <h2 class="block">Publishing a widget</h2>
 
-    <p>An account is needed only to publish a widget. It stores your email address, your
-    username, and anything you choose to put in your profile. Sign-in is handled by Supabase, our
-    database provider, which processes your email and password on our behalf.</p>
+    <p>Publishing is done on GitHub: you open a pull request that adds your widget, with your
+    GitHub account and under GitHub's privacy policy. A widget you publish is public: its name,
+    description, source code and your GitHub username are shown to everyone. The profile
+    pictures on this site are copies of authors' GitHub pictures kept on this site, so seeing
+    one contacts nobody else.</p>
 
-    <p>When you sign in from the app, the access token is stored encrypted on your PC
-    (%APPDATA%\DeskWidgets\account.dat). In a browser it is kept in that browser's local storage,
-    along with your light or dark theme preference and, so the menu doesn't reload on every
-    page, your username and a small copy of your profile photo. Signing out removes them. The
-    site sets no advertising or tracking cookies.</p>
+    <h2 class="block">Accounts made before November 2026</h2>
 
-    <p>A widget you publish is public: its name, description, source code and author name are
-    shown to everyone. Your email address is not.</p>
+    <p>This website used to have accounts for publishing widgets. It no longer does, and it
+    collects nothing new. An account made before then is still held by Supabase, our former
+    database provider: your email address, your username, and anything you put in your profile.
+    The app can still sign in to it, and when you do, the access token is stored encrypted on
+    your PC (%APPDATA%\DeskWidgets\account.dat). These accounts will be deleted when that
+    database is shut down; to have yours deleted sooner, ask at the address under Contact.</p>
+
+    <p>In a browser, this site keeps one thing in local storage: your light or dark theme
+    preference. It sets no cookies.</p>
 
     <h2 class="block">This website</h2>
 

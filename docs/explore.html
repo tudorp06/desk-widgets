@@ -9,9 +9,7 @@
   <link rel="modulepreload" href="assets/site.js">
   <link rel="modulepreload" href="config.js">
   <link rel="modulepreload" href="assets/data.js">
-  <link rel="preconnect" href="https://vtgsbgkjleyqlxgjdvqy.supabase.co">
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm">
+  <link rel="preload" href="w/gallery.json" as="fetch" crossorigin>
 </head>
 <body>
   <main class="content">
@@ -59,8 +57,8 @@
   </main>
 
   <script type="module">
-    import { nav, el, art, avatar, getButton, categoryName, categoryIcon, isValidId, notice, DOWNLOAD_URL, widgetCard as card, personCard } from "./assets/site.js";
-    import { getWidgets, getProfiles, getPreviews, getPhoto, available } from "./assets/data.js";
+    import { nav, el, avatar, categoryName, categoryIcon, notice, widgetCard as card, personCard } from "./assets/site.js";
+    import { getWidgets, getProfiles, getPreviews } from "./assets/data.js";
 
     nav("explore");
 
@@ -173,7 +171,7 @@
       pendingPreviews.clear();
       const asked = widgets.filter(w => batch.has(w.id));
       try {
-        const map = await getPreviews(asked, "assets/img/");
+        const map = await getPreviews(asked);
         for (const [id, artEl] of batch) {
           const preview = map.get(id);
           const w = widgets.find(w => w.id === id);
@@ -190,27 +188,8 @@
       }
     }
 
-    // Someone whose photo has no small copy yet (it is made on their next visit) starts as their
-    // initial. The photo is fetched once their card is on screen, one person at a time since it
-    // can be megabytes, and failing just leaves the initial.
-    let photoQueue = Promise.resolve();
-    const photoObserver = new IntersectionObserver((entries, obs) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const card = entry.target, person = card.person;
-        obs.unobserve(card);
-        if (person.photoAsked) continue;
-        person.photoAsked = true;
-        photoQueue = photoQueue.then(() => getPhoto(person.username, true)).then((photo) => {
-          if (!photo) return;
-          person.avatar = photo;
-          if (peopleMode) renderPeople();
-        }).catch(() => {});
-      }
-    });
-
-    // The card itself lives in site.js (the upload page shows the same component); this only
-    // supplies the skeleton art element that previews are lazy-loaded into.
+    // The card itself lives in site.js; this only supplies the skeleton art element that
+    // previews are loaded into once the card is near the screen.
     function widgetCard(w) {
       const artEl = el("div", { class: "art skeleton", "data-widget-id": w.id });
       previewObserver.observe(artEl);
@@ -234,36 +213,24 @@
       const q = search.value.trim().toLowerCase();
       const shown = authors.filter(a => !q || (a.username + " " + (a.bio || "")).toLowerCase().includes(q));
       const widgetCount = username => widgets.filter(w => w.author === username).length;
-      peopleGrid.replaceChildren(...shown.map(a => {
-        const count = widgetCount(a.username);
-        const person = personCard(a, count);
-        if (!a.avatar_thumb && !a.avatar) photoObserver.observe(Object.assign(person, { person: a }));
-        return person;
-      }));
+      peopleGrid.replaceChildren(...shown.map(a => personCard(a, widgetCount(a.username))));
       if (authors.length && !shown.length)
         peopleGrid.replaceChildren(el("p", { class: "empty" }, "No people match."));
     }
 
     async function load() {
-      if (!available) { grid.replaceChildren(); status.replaceChildren(notice("The community gallery isn't connected yet. The built-in widgets come with the app.")); return; }
-      getProfiles().then((data) => {
-        authors = data || [];
-        renderPeople();
-      }).catch(() => {
-        peopleError = true;
-        renderPeople();
-      });
       try {
-        const widgetData = await getWidgets();
-        widgets = (widgetData || []).filter(w => isValidId(w.id));
+        [widgets, authors] = await Promise.all([getWidgets(), getProfiles()]);
         buildFilters();
         if (!widgets.length) { grid.replaceChildren(); status.replaceChildren(el("div", { class: "empty" },
           el("p", { class: "t-card" }, "Nothing here yet."), el("p", {}, "Reviewed community widgets will appear here."))); }
         render();
-        if (authors.length) renderPeople();
+        renderPeople();
       } catch (e) {
+        peopleError = true;
         grid.replaceChildren();
         status.replaceChildren(notice("The gallery couldn't load. Check your connection and reload the page.", true));
+        renderPeople();
       }
     }
     load();
