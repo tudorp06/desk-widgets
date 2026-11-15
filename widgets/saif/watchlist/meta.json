@@ -1,0 +1,7 @@
+{
+  "name": "Watchlist",
+  "category": "finance",
+  "description": "Stock prices and daily changes",
+  "api_version": 1,
+  "version": 1
+}

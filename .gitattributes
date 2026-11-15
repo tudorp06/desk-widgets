@@ -4,3 +4,6 @@
 *.png binary
 .githooks/* text eol=lf
 *.ps1 text eol=crlf
+
+# Community widgets are hashed byte for byte (tools/build-widget-pages.mjs): never convert them.
+widgets/**/*.cs -text

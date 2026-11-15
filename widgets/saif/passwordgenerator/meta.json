@@ -1,0 +1,7 @@
+{
+  "name": "Password Generator",
+  "category": "productivity",
+  "description": "Generate and copy strong passwords",
+  "api_version": 2,
+  "version": 2
+}

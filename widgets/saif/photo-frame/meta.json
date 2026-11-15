@@ -1,0 +1,7 @@
+{
+  "name": "Photo Frame",
+  "category": "media",
+  "description": "A picture from your folder, changes hourly",
+  "api_version": 1,
+  "version": 1
+}

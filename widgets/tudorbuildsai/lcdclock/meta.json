@@ -1,0 +1,7 @@
+{
+  "name": "LCD Clock",
+  "category": "clocks",
+  "description": "A minimal digital clock with four LCD and LED faces, in bright different colours",
+  "api_version": 2,
+  "version": 1
+}

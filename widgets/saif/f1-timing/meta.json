@@ -1,0 +1,7 @@
+{
+  "name": "F1 Timing",
+  "category": "sports",
+  "description": "The top five of the current or latest session, updated live",
+  "api_version": 1,
+  "version": 1
+}

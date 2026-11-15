@@ -1,0 +1,7 @@
+{
+  "name": "Nothing Volume",
+  "category": "productivity",
+  "description": "A volume knob: drag or scroll to turn it, click to mute",
+  "api_version": 3,
+  "version": 1
+}

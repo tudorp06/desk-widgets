@@ -1,0 +1,7 @@
+{
+  "name": "Snake",
+  "category": "games",
+  "description": "Snake with levels or endless mode, skins, in XP, Liquid Glass or Clean style",
+  "api_version": 2,
+  "version": 1
+}

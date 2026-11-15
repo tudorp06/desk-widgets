@@ -1,0 +1,7 @@
+{
+  "name": "System Monitor",
+  "category": "system",
+  "description": "A large panel: CPU, memory, disk, network and uptime",
+  "api_version": 2,
+  "version": 1
+}

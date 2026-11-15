@@ -10,6 +10,8 @@ widgets.ini
 
 # generated
 graphify-out/
+# the published gallery, built from widgets/ by tools/build-widget-pages.mjs
+docs/w/
 
 # server tests
 node_modules/

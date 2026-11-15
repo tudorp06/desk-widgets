@@ -1,0 +1,7 @@
+{
+  "name": "Nothing Screen Time",
+  "category": "productivity",
+  "description": "Time this PC has been in use today, against a daily limit",
+  "api_version": 3,
+  "version": 1
+}

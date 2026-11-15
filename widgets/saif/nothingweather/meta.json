@@ -1,0 +1,7 @@
+{
+  "name": "Nothing Weather",
+  "category": "productivity",
+  "description": "Dot-matrix weather with a six-day forecast from MET Norway",
+  "api_version": 3,
+  "version": 1
+}

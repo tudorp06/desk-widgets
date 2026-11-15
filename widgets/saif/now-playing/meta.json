@@ -1,0 +1,7 @@
+{
+  "name": "Now Playing",
+  "category": "productivity",
+  "description": "What's playing, with play, pause and skip",
+  "api_version": 2,
+  "version": 2
+}
