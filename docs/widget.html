@@ -13,8 +13,8 @@
   <main class="content section" id="page"></main>
 
   <script type="module">
-    import { nav, el, artFrom, getButton, supabase, configured, categoryName, isValidId, notice, formatDate, visibleSource, avatar } from "./assets/site.js";
-    import { getLivePreviews } from "./assets/data.js";
+    import { nav, el, artFrom, getButton, categoryName, isValidId, notice, formatDate, visibleSource, avatar, REPO_URL } from "./assets/site.js";
+    import { getWidget, getProfile, getPreviews, getSource } from "./assets/data.js";
 
     nav(null);
     const page = document.getElementById("page");
@@ -22,35 +22,27 @@
 
     async function load() {
       if (!isValidId(id)) { page.replaceChildren(notice("This link doesn't point to a widget.", true)); return; }
-      if (!configured) { page.replaceChildren(notice("The community gallery isn't connected yet.")); return; }
       try {
-        const db = await supabase();
-        // Only approved versions are readable without an account (RLS), newest first.
-        const { data: versions, error } = await db.from("versions")
-          .select("version, name, category, description, api_version, source, sha256, reviewed_at")
-          .eq("widget_id", id).eq("status", "approved").order("version", { ascending: false });
-        if (error) throw error;
-        if (!versions || !versions.length) { page.replaceChildren(notice("This widget isn't available.", true)); return; }
-        // The picture is a file on this site (data.js); started now, shown with the rest.
-        const picture = getLivePreviews([{ id, version: versions[0].version }]).catch(() => new Map());
-        const { data: listed } = await db.from("explore").select("author").eq("id", id).maybeSingle();
-        const { data: author } = listed
-          ? await db.from("authors").select("username, bio, avatar_thumb").eq("username", listed.author).maybeSingle() : { data: null };
-        show(versions, author || { username: listed ? listed.author : "", bio: "" }, (await picture).get(id) || null);
+        const w = await getWidget(id);
+        if (!w) { page.replaceChildren(notice("This widget isn't available.", true)); return; }
+        const [source, author, previews] = await Promise.all([getSource(w), getProfile(w.author), getPreviews([w])]);
+        show(w, source, author || { username: w.author, bio: "" }, previews.get(id) || null);
       } catch (e) {
         page.replaceChildren(notice("This page couldn't load. Check your connection and reload.", true));
       }
     }
 
-    function show(versions, author, preview) {
-      const w = versions[0];
+    function show(w, source, author, preview) {
       document.title = w.name + " · Desk Widgets";
-      const kb = Math.max(1, Math.round(new TextEncoder().encode(w.source).length / 1024));
+      const kb = Math.max(1, Math.round(new TextEncoder().encode(source).length / 1024));
       const fact = (label, value, unit) => el("div", {}, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "unit" }, unit));
+      // The widget's folder in the repository: where every change to it was reviewed.
+      const [, folder, slug] = id.split(".");
+      const history = REPO_URL + "/commits/main/widgets/" + encodeURIComponent(folder) + "/" + encodeURIComponent(slug);
 
       page.replaceChildren(
         el("div", { class: "product" },
-          artFrom(preview, w.name),
+          artFrom(preview, w.name, w.category),
           el("div", {},
             el("h1", { class: "t-large" }, w.name),
             el("p", { class: "subtitle" }, w.description || categoryName(w.category)),
@@ -64,18 +56,15 @@
         el("div", { class: "info", role: "list" },
           fact("Version", String(w.version), "latest"),
           fact("Category", categoryName(w.category), ""),
-          fact("Reviewed", formatDate(w.reviewed_at), "by the owner"),
+          fact("Reviewed", formatDate(w.reviewed_at), "by a maintainer"),
           fact("Size", kb + " KB", "C# source"),
           fact("Needs", "API " + w.api_version, "Desk Widgets")),
         el("h2", { class: "block", id: "source" }, "Source"),
         el("p", { class: "t-reduced" }, "This is the code that runs on your PC. SHA-256 " + w.sha256),
-        el("pre", { class: "code" }, visibleSource(w.source)),
-        el("h2", { class: "block" }, "Version history"),
-        el("div", { class: "group" }, versions.map(v =>
-          el("div", { class: "row" },
-            el("div", { class: "main" }, el("div", { class: "t-headline" }, "Version " + v.version),
-              el("div", { class: "t-reduced" }, "Reviewed " + formatDate(v.reviewed_at))),
-            getButton(id, v.version, v === w ? "Get" : "Get v" + v.version)))));
+        el("pre", { class: "code" }, visibleSource(source)),
+        el("h2", { class: "block" }, "History"),
+        el("p", { class: "t-reduced" }, "Every version of this widget was reviewed as a pull request. ",
+          el("a", { class: "more", href: history, rel: "noreferrer" }, "See its history on GitHub")));
     }
     load();
   </script>

@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="assets/site.css">
   <link rel="modulepreload" href="assets/site.js">
   <link rel="modulepreload" href="config.js">
-  <link rel="modulepreload" href="assets/data.js">
 </head>
 <body>
   <main class="content narrow section">
@@ -246,24 +245,54 @@ public sealed class GreetingWidget : CardWidget
         size.</div></div></div>
     </div>
 
-    <h2 class="block">Publishing</h2>
+    <h2 class="block" id="publish">Publishing</h2>
 
-    <p>When your widget is ready for others to use:</p>
+    <p>The gallery is a folder in the app's
+    <a href="https://github.com/whoissaaif/desk-widgets/tree/main/widgets">GitHub repository</a>.
+    You publish by opening a pull request that adds your widget to it, and it appears in the
+    gallery once a maintainer has read it and merged it.</p>
 
     <div class="group" role="list">
-      <div class="row"><div class="main"><div class="t-headline">1. Create an account</div>
-        <div class="t-reduced">Sign in on this site. You need an account to upload.</div></div></div>
-      <div class="row"><div class="main"><div class="t-headline">2. Go to Upload</div>
-        <div class="t-reduced">Visit the <a href="upload.html">Upload</a> page. Fill in the
-        widget ID (a short unique slug like <code>greeting</code>), pick a category, and paste
-        your source code.</div></div></div>
-      <div class="row"><div class="main"><div class="t-headline">3. Add a preview image</div>
-        <div class="t-reduced">Upload a screenshot of your widget (PNG or JPEG, max 1200 px on
-        the longest side). This is what people see in the gallery.</div></div></div>
-      <div class="row"><div class="main"><div class="t-headline">4. Wait for review</div>
-        <div class="t-reduced">Every version is read by a person before it appears in the
-        gallery. You will see the status on your profile page.</div></div></div>
+      <div class="row"><div class="main"><div class="t-headline">1. Fork the repository</div>
+        <div class="t-reduced">You need a GitHub account. Your folder is
+        <code>widgets/&lt;your GitHub username, in lower case&gt;/</code>, and only you can
+        change it.</div></div></div>
+      <div class="row"><div class="main"><div class="t-headline">2. Add your widget's folder</div>
+        <div class="t-reduced">Pick a short name of lower case letters, digits and hyphens, like
+        <code>greeting</code>, and create <code>widgets/&lt;you&gt;/greeting/</code> with three
+        files: <code>widget.cs</code> (your source), <code>preview.png</code> (a picture of the
+        widget, under 100 KB; this is what people see in the gallery) and
+        <code>meta.json</code>.</div></div></div>
+      <div class="row"><div class="main"><div class="t-headline">3. Describe it</div>
+        <div class="t-reduced"><code>meta.json</code> holds the name (up to 40 characters), one
+        category, a description (up to 120 characters), the API version it needs and its own
+        version, which starts at 1. The first time, also add
+        <code>widgets/&lt;you&gt;/author.json</code> with your GitHub username and a short
+        bio.</div></div></div>
+      <div class="row"><div class="main"><div class="t-headline">4. Open a pull request</div>
+        <div class="t-reduced">It is checked automatically: the files are in your own folder,
+        the widget follows the rules below, and it compiles. Then a person reads the code. Once
+        it is merged, the widget is in the gallery a few minutes later.</div></div></div>
+      <div class="row"><div class="main"><div class="t-headline">Updating it later</div>
+        <div class="t-reduced">Change <code>widget.cs</code>, raise <code>version</code> in
+        <code>meta.json</code> by one, and open another pull request. People who installed it
+        are told a new version is available.</div></div></div>
     </div>
+
+    <pre class="code">widgets/you/author.json
+{ "github": "You", "bio": "One line about you" }
+
+widgets/you/greeting/meta.json
+{
+  "name": "Greeting",
+  "category": "utility",
+  "description": "Says hello, by time of day",
+  "api_version": 1,
+  "version": 1
+}</pre>
+
+    <p class="t-reduced">Categories: clocks, productivity, weather, system, media, developer,
+    sports, finance, news, utility, social, health, travel, games.</p>
 
     <h2 class="block">Rules</h2>
 
