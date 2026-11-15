@@ -12,7 +12,7 @@ has the exact files. The pull request is checked automatically (your own folder 
 rules, and that it compiles), and a maintainer reads every version before merging it. It appears
 in Explore a few minutes after the merge. None of the steps below apply to a widget.
 
-## Changes to the app, website or server: a pull request
+## Changes to the app or website: a pull request
 
 1. Open an issue first for anything bigger than a small fix, so we agree on the approach.
 2. Fork, then branch from `main` (`fix-calendar-timezones`, `add-moon-widget`).
@@ -33,12 +33,12 @@ in Explore a few minutes after the merge. None of the steps below apply to a wid
 - **Writing.** Buttons and menu items in title style ("Add to Desktop"); messages are plain
   sentences that say what happened and what to do.
 - **Security.** Community code runs on people's PCs, so changes to the install path (`Community.cs`,
-  `Plugins.cs`), `server/schema.sql` or the Edge Functions need a test or a clear explanation of why
-  they're safe. Every new database rule gets a check in `server/test/schema.test.mjs`.
+  `Plugins.cs`), the widget rules (`tools/widget-rules.mjs`) or the pull request check
+  (`.github/workflows/widgets.yml`, `tools/check-widget-pr.mjs`) need a test or a clear explanation
+  of why they're safe.
 - **No hidden characters.** `tools/check-hidden.ps1` (run by `build.bat` and the pre-commit hook)
   refuses characters that make code read differently from how it runs.
-- **Secrets** never go in the repo. The Supabase publishable key in `docs/config.js` and
-  `src/Community.cs` is public by design; secret keys live only in Supabase.
+- **Secrets** never go in the repo. Nothing in the app, the website or the workflows needs one.
 
 ### Checking your change
 

@@ -179,7 +179,6 @@ Code must stay C# 5 (the compiler built into Windows): no `$"..."`, `?.`, or `=>
 | --- | --- |
 | `src/` | The app (one exe, C# 5, no dependencies) |
 | `docs/` | The website (landing page, explore, profiles, the publishing guide), built with the gallery and served by GitHub Pages |
-| `server/` | Supabase schema, Edge Functions (`invite`, `login`), email templates, and tests |
 | `design/` | The design language (`apple-design.md`), the community design and widget mockups |
 | `packaging/` | Inno Setup installer script and MSIX manifest for Windows packaging |
 | `samples/` | A minimal community widget (`HelloWidget.cs`) |
