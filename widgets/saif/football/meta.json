@@ -1,0 +1,7 @@
+{
+  "name": "Football",
+  "category": "sports",
+  "description": "Live scores, results and fixtures for your league, with the team you follow on top",
+  "api_version": 3,
+  "version": 1
+}
