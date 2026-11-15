@@ -116,8 +116,8 @@ Single-process, single-exe WinForms app. No designer files — all UI is hand-co
 - **`Plugins.cs`** — community widget lifecycle: compile `.cs` against the running exe, hash-check
   against the reviewed version, crash isolation via a marker file. Installed under
   `%LOCALAPPDATA%\DeskWidgets\plugins\<id>\`.
-- **`Community.cs`** — reads the Supabase gallery (public anon key, RLS), downloads previews,
-  installs approved versions. Handles `deskwidgets://install/<id>/<version>` URLs.
+- **`Community.cs`** — reads the gallery from files on the website (`w/gallery.json`, and each
+  widget's `source.cs` and `preview.png`), keeps previews on disk, installs the published version. Handles `deskwidgets://install/<id>/<version>` URLs.
 - **`PluginApi.cs`** — the public API surface that community widgets compile against (API v3):
   this file plus `WidgetWindow`, `CardWidget`, `Section`, `PopupMenu`, `InputDialog`, `Http`,
   `CalEvent`, `Ics`, `MediaSession`, `F1`, `F1LiveFeed`. Treat as frozen; changing a public
@@ -159,7 +159,7 @@ beside it. `upload.html`, `account.html`, `admin.html`, `login.html` and `passwo
 redirects to the publishing guide (`develop.html#publish`), kept because older copies of the
 app and old links still open them.
 
-The gallery is moving out of Supabase and into the repository; the website has already moved. Every community widget lives in
+The gallery is in the repository, not in a database. Every community widget lives in
 `widgets/<author>/<slug>/` (`widget.cs`, `preview.png`, `meta.json`; one `author.json` per
 author) and its id is `u.<author>.<slug>`. `tools/build-widget-pages.mjs` builds `docs/w/` from
 that folder: `gallery.json` (every widget with the SHA-256 of its source, and every author),
@@ -177,9 +177,10 @@ changes, and the widget compiles against the app built from `main`. That workflo
 `pull_request_target` and treats the pull request as data; never add a step to it that checks
 out or runs a file from the pull request.
 
-Until the app reads `gallery.json` too, it still reads Supabase (`src/Community.cs`), so a
-widget that exists only in `widgets/` shows on the website but an installed app cannot get it
-yet. `tools/export-gallery.mjs` is the one-off that copied the widgets out of Supabase.
+The app reads the same files (`src/Community.cs`). It has no account and sends nothing about
+what was installed, so there are no likes or install counts. Copies of the app older than 1.9
+still read Supabase until it is shut down; `server/` and `tools/export-gallery.mjs` are what is
+left of it and go when it does.
 
 ## Performance expectations
 
@@ -205,4 +206,4 @@ on the community page. Their source lives in `widgets/` and is not compiled into
 - Plugin source + DLLs: `%LOCALAPPDATA%\DeskWidgets\plugins\<id>\`.
 - Preview cache: `%LOCALAPPDATA%\DeskWidgets\previews\`.
 - Widget caches (GitHub, weather): `%APPDATA%\DeskWidgets\cache\`.
-- Account token: `%APPDATA%\DeskWidgets\account.dat` (DPAPI-encrypted).
+

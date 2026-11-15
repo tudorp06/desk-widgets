@@ -170,6 +170,7 @@ namespace DeskWidgets
 
             // Newer approved versions of installed community widgets: shortly after start, then daily.
             Ui.Later(Community.CheckForUpdates, 30000);
+            ForgetOldAccount();
             updateTimer.Tick += delegate { Community.CheckForUpdates(); };
             updateTimer.Start();
 
@@ -418,81 +419,21 @@ namespace DeskWidgets
                 if (pick.ShowDialog() == DialogResult.OK) Plugins.InstallFromFile(pick.FileName);
         }
 
-        // ---- the gallery account (Account) ----
+        // ---- publishing ----
 
-        // Asks for username and password until they work or the person cancels, then says so and
-        // runs then (on the UI thread). Network work happens off the UI thread.
-        public static void SignIn(Action then)
+        // Widgets are published by pull request on GitHub; the website explains how. The app has
+        // no account and uploads nothing.
+        public static void PublishWidget()
         {
-            SignIn("", null, then);
+            OpenWebsite("develop.html#publish");
         }
 
-        static void SignIn(string name, string problem, Action then)
+        // Versions before 1.9 could sign in to the old gallery and kept its token here. There is
+        // nothing to sign in to any more, so the file is removed rather than left behind.
+        static void ForgetOldAccount()
         {
-            string[] v = InputDialog.Ask("Sign In to Desk Widgets",
-                problem ?? "Use the username and password you chose on the website when you accepted your invite.",
-                new[] { new InputDialog.Field { Label = "Username", Value = name }, new InputDialog.Field { Label = "Password", Secret = true } },
-                "Sign In", "Request Access", d => { d.Close(); RequestAccess(); });
-            if (v == null) return;
-            string user = v[0].Trim().ToLowerInvariant(), password = v[1];
-            if (user.Length == 0 || password.Length == 0) { SignIn(user, "Type your username and password.", then); return; }
-            ThreadPool.QueueUserWorkItem(delegate
-            {
-                string error = Account.SignIn(user, password);
-                if (error == null) Account.LoadProfile();
-                RunOnUi(delegate
-                {
-                    if (error != null) { SignIn(user, error, then); return; }
-                    AlertDialog.Show("You're signed in.", "Signed in as " + Account.Username + ". You can upload widgets from Explore.");
-                    if (then != null) then();
-                });
-            });
-        }
-
-        static void RequestAccess()
-        {
-            if (!Community.Configured) { AlertDialog.Show("Uploads aren't connected yet.", "This copy of Desk Widgets doesn't know where the gallery is."); return; }
-            string[] v = InputDialog.Ask("Request Access",
-                "Enter your email. If the owner accepts, you'll get a link to set up your account.",
-                new[] { new InputDialog.Field { Label = "Email" } }, "Request Access");
-            if (v == null) return;
-            string email = v[0].Trim();
-            if (email.Length == 0) return;
-            ThreadPool.QueueUserWorkItem(delegate
-            {
-                string error = null;
-                try
-                {
-                    var headers = new Dictionary<string, string> { { "apikey", Community.AnonKey } };
-                    if (Community.AnonKey.StartsWith("eyJ")) headers["Authorization"] = "Bearer " + Community.AnonKey;
-                    Http.SendJson("POST", Community.Url + "/rest/v1/rpc/request_access", headers,
-                        new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(
-                            new Dictionary<string, string> { { "p_email", email } }));
-                }
-                catch (HttpError e) { error = e.Message; }
-                catch (Exception) { error = "The gallery couldn't be reached. Check your connection and try again."; }
-                RunOnUi(delegate
-                {
-                    if (error != null) AlertDialog.Show("Request wasn't sent.", error);
-                    else AlertDialog.Show("Request sent.", "If the owner accepts, you'll get an email with a link to set up your account.");
-                });
-            });
-        }
-
-        // Upload a widget for review: a widget installed from a file (its source and a rendered
-        // preview), or a .cs file picked now. Signs in first if needed.
-        public static void UploadWidget(PluginInfo plugin)
-        {
-            if (!Community.Configured) { AlertDialog.Show("Uploads aren't connected yet.", "This copy of Desk Widgets doesn't know where the gallery is."); return; }
-            if (!Account.SignedIn) { SignIn(delegate { UploadWidget(plugin); }); return; }
-            string path = plugin != null ? plugin.SourcePath : null;
-            if (path == null)
-                using (var pick = new OpenFileDialog { Title = "Upload a Widget", Filter = "C# widget (*.cs)|*.cs" })
-                {
-                    if (pick.ShowDialog() != DialogResult.OK) return;
-                    path = pick.FileName;
-                }
-            UploadDialog.Run(path, plugin);
+            try { File.Delete(Path.Combine(DataDir, "account.dat")); }
+            catch (Exception) { }
         }
 
         public static void OpenWebsite(string path)

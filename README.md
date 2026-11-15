@@ -118,20 +118,18 @@ widget shows instantly at startup and keeps working offline.
 - **Auto-update**: the app checks GitHub releases in the background and shows a dialog when a new
   version is available, with release notes and a download link.
 - **Community widgets**: Explore (in the window and on the website) lists community widgets, each
-  read and approved by the owner before it appears. **Get** opens Desk Widgets, which downloads
-  that exact version, checks its hash and asks before installing. Clicking Get on the website uses
+  read by a maintainer before it appears. **Get** opens Desk Widgets, which downloads
+  it, checks its hash and asks before installing. Clicking Get on the website uses
   the `deskwidgets://install/` protocol to hand the install to the running app. Explore marks the
-  ones you have as Installed. The Installed section shows them with **Update** when a newer approved
+  ones you have as Installed. The Installed section shows them with **Update** when a newer
   version is out, and **Install from File…** for a `.cs` you wrote yourself (see
-  `samples/HelloWidget.cs`). Setup of the backend and website: `server/README.md`; the design:
-  `design/community-plan.md`.
-- **Uploading your own**: uploading is by invitation. Request access with your email on the
-  [Upload page](https://whoissaaif.github.io/desk-widgets/upload.html); when the owner accepts,
-  you get an email to choose a username, password, bio and photo. Then sign in on the website or in
-  the app (the account row at the bottom of the sidebar) and upload from either: Explore ›
-  Upload a Widget…, or right-click a widget you installed from a file › Upload to the Gallery…
-  (it sends a preview rendered from the widget). The app keeps only a refresh token, encrypted with
-  DPAPI in `%APPDATA%\DeskWidgets\account.dat`.
+  `samples/HelloWidget.cs`).
+- **Publishing your own**: the gallery is the [`widgets/`](widgets) folder of this repository.
+  Open a pull request that adds your widget to `widgets/<your GitHub username>/`; it is checked
+  automatically, read by a maintainer, and in the gallery a few minutes after it is merged. The
+  [publishing guide](https://whoissaaif.github.io/desk-widgets/develop.html#publish) has the
+  details. Right-click a widget you installed from a file › Save Preview writes the
+  `preview.png` it asks for. There are no accounts, in the app or on the website.
 
 ## Settings & portability
 
@@ -153,8 +151,8 @@ widget shows instantly at startup and keeps working offline.
 ## Adding a new widget
 
 Most widgets belong in the community gallery, not compiled into the app. Write one C# file (start
-from `samples/HelloWidget.cs`), test it with Installed › Install from File…, then upload it to the
-gallery. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+from `samples/HelloWidget.cs`), test it with Installed › Install from File…, then publish it to the
+gallery with a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 To add a **built-in** widget:
 
@@ -180,7 +178,7 @@ Code must stay C# 5 (the compiler built into Windows): no `$"..."`, `?.`, or `=>
 | Path | What |
 | --- | --- |
 | `src/` | The app (one exe, C# 5, no dependencies) |
-| `docs/` | The website (landing page, explore, profiles, upload, admin), served by GitHub Pages from `main` |
+| `docs/` | The website (landing page, explore, profiles, the publishing guide), built with the gallery and served by GitHub Pages |
 | `server/` | Supabase schema, Edge Functions (`invite`, `login`), email templates, and tests |
 | `design/` | The design language (`apple-design.md`), the community design and widget mockups |
 | `packaging/` | Inno Setup installer script and MSIX manifest for Windows packaging |

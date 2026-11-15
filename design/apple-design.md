@@ -762,31 +762,22 @@ from File…" and "Try Again"); **Grey** `fill` with label text; **Destructive**
 text. One Primary per group.
 
 ### 17.7 Library pages for community widgets
-- **Explore**: Large Title "Explore", a Tinted "Upload a Widget…" at the top right (it opens the
-  upload sheet, signing in first if needed), then the same 176 × 240 cards with the preview, name,
+- **Explore**: Large Title "Explore", a Tinted "Publish a Widget ↗" at the top right (it opens
+  the publishing guide on the website), then the same 176 × 240 cards with the preview, name,
   "author · category" and a Tinted button at the bottom right: **Get**, **Update** when a newer
   version than yours is out, **Add** when you have it. A widget you have shows a third line, a
   checkmark and "Installed" (or "Installed · v1" when an update is out), in secondary text.
   Between the title and the grid sits one row: a rounded search field (§8.7) filling the width
   with the placeholder “Search widgets”, and a Grey capsule at the right naming the current sort
-  with a ▾ — **Newest** (the default, the order the gallery returns), **Most Liked**, **Most
-  Installed**, **Name**. It opens the app’s own menu with a checkmark on the active one. The row
+  with a ▾ — **Newest** (the default, the order the gallery lists them in) and **Name**. It opens the app’s own menu with a checkmark on the active one. The row
   is hidden while Explore has nothing to narrow, and a search matching nothing shows the empty
   state “No Matches”.
-- **Likes**: each Explore card carries one chip in the preview’s top-right corner, on the grey
-  fill. At rest it is a heart alone — red when you have liked it, secondary when not. The count
-  slides out to the heart’s left while the pointer is over the card, and for about a second and a
-  half after a tap; the heart itself never moves, so what you are aiming at stays put. Tapping
-  signs you in first if you need it. The count moves the moment you tap and goes back if the write
-  fails, so it never claims more than the gallery holds. Counts read 999, then 1k, 12k, 999k, 1M:
-  three digits and at most one letter, so the chip has a width it cannot exceed.
-  **Install counts are never drawn on a card.** They order the Most Installed sort and nothing
-  else: anyone with the public key can raise one, so showing it would publish a number the app
-  cannot stand behind.
+- **No counts on a card.** The gallery is a set of files and keeps no likes or install counts,
+  so a card shows nothing the app cannot stand behind.
 - **Dragging from Explore**: an Explore card drags onto the desktop like a library card, with the
   gallery's preview as the ghost. A widget you already have is placed where you let go. One you
   don't have shows the install sheet first, and lands at that spot once you agree; Cancel places
-  nothing. The heart and the button never start a drag.
+  nothing. The button never starts a drag.
 - **Explore keeps its cards**: the list is shown from the kept copy at once and refreshed from
   the gallery when it is more than ten minutes old. A refresh changes cards in place — it never
   clears the grid, shows "Loading…" over cards, or moves the scroll position. Installing or
@@ -798,8 +789,8 @@ text. One Primary per group.
   Installed Widgets", "Loading…", "Explore Couldn’t Load").
 
 ### 17.8 Settings
-The Settings page opens from the gear icon at the bottom of the sidebar (below the nav,
-above the account row) or from "Settings…" in the tray menu:
+The Settings page opens from the gear icon at the bottom of the sidebar (below the nav) or from
+"Settings…" in the tray menu:
 - **Start with Windows**: a toggle row (the same `SidebarItem` switch style as before).
 - **Appearance**: a group label ("Appearance" in 12/600 secondary), then three selectable rows
   — System, Light, Dark — with a checkmark glyph on the active choice and a selection
@@ -812,20 +803,16 @@ above the account row) or from "Settings…" in the tray menu:
   (Cancel default, Uninstall red), then removes the autostart entry, Start menu shortcut,
   URL protocol, settings and caches, and exits.
 
-### 17.9 Accounts
-- **App**: the account is the last row of the sidebar above Settings: your photo
-  (22 px circle) and username, or the person glyph and "Sign In". Signed out, it opens the sign-in
-  sheet (Username, Password; "Request Access" on the left). Signed in, it opens a menu: Upload a
-  Widget…, Your Uploads ↗, Edit Profile ↗, Admin Console ↗ (owner only), then Sign Out. Signing in
-  ends with an alert that says so.
-- **Upload sheet**: the input sheet (17.5) with pop-up pickers for Widget and Category (a field
-  with a blue chevron that opens a menu of choices), the source and preview as a file name with a
-  Grey "Choose…" button, and errors in red above the buttons.
-- **Website**: the right end of the nav is "Sign In", or a 28 px round photo (the first letter on
-  grey when there's none) that opens a menu in the 17.4 style: name, then Your Uploads, Edit
-  Profile, Admin Console (owner), Sign Out. The owner also gets an "Admin" link in the nav.
-- **Toasts** confirm what just happened ("Signed in as saif.", "Request sent."): a glass-like
-  capsule under the nav, 14/600, gone after 4 s. Use them only for confirmations, never errors.
+### 17.9 Publishing
+There are no accounts, in the app or on the website. A widget is published by pull request on
+GitHub, and the app's part is to point there: "Publish a Widget ↗" on Explore and "Publish to
+the Gallery ↗" in the menu of a widget installed from a file both open the publishing guide
+(`develop.html#publish`). "Save Preview" in that menu writes the `preview.png` the guide asks
+for. The ↗ marks anything that leaves the app for the browser.
+
+On the website the right end of the nav holds only the light and dark switch. An author's
+picture is a round photo (their GitHub picture), or the first letter of their name on grey when
+there is none.
 
 ### 17.10 Landing page
 `docs/index.html` follows the marketing homepage (§2.1): full-bleed tiles with 12 px gutters,
@@ -846,16 +833,15 @@ radius of §17.13 scaled to their height, and a card never reaches the CSS camer
 `docs/assets/site.css` implements §14 with the light and dark tokens of §4: the 44 px glass nav,
 a 980 px column (1024 with 22 px gutters), a 56/60 hero with a two-tone intro, the pill segmented
 filter, tiles at r18 with a Tinted **Get**, an App Store-style widget page (info strip of Version,
-Category, Reviewed, Size, Needs) and grouped lists for uploads. Everything people upload reaches
-the page as text, never as HTML.
+Category, Reviewed, Size, Needs) and grouped lists for steps and rules. Everything an author
+wrote reaches the page as text, never as HTML.
 
 `docs/download.html` is where every Download link goes: two tiles at r18 side by side (stacked
 under 735 px), the installer first with the one Filled button, the Microsoft Store second with an
 Outlined one, each with a line icon, a title, one sentence and a caption. The single .exe is a
 text link under the tiles, not a third tile.
 
-Pages cross-fade into each other (160 ms, off under reduced motion), and the nav paints the
-signed-in account from what the last page knew, so nothing in it appears late.
+Pages cross-fade into each other (160 ms, off under reduced motion).
 
 ### 17.12 Writing
 Buttons and menu items use title style ("Add to Desktop", "Show Source", "Remove Widget");
