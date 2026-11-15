@@ -2,9 +2,14 @@
 # by hand. CLAUDE.md says every release carries DeskWidgets.exe, DeskWidgets-Setup.exe,
 # DeskWidgets.msix and the source zip GitHub adds itself; this is what enforces it.
 #
-# The intended flow: create the release as a DRAFT with notes, let this fill it in, then publish.
-# "created" fires for a draft, "published" covers a release made in one go, and the uploads use
-# --clobber so a re-run just replaces the files.
+# The intended flow (CLAUDE.md has the commands): push the tag, create the release as a DRAFT
+# with notes, start this by hand with that tag (workflow_dispatch), then publish.
+#
+# By hand, because GitHub fires no release event for a draft: neither "created" nor anything
+# else runs until the release is published, and a draft does not create its tag either, which
+# is why the tag is pushed first. "published" then runs this once more from the same tag, and
+# also covers a release made in one go. The uploads use --clobber, so every run after the first
+# just replaces the files with equivalent ones.
 name: Release
 
 on:
