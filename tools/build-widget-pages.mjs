@@ -31,11 +31,11 @@
 // Before serving docs/ locally, run it once, or the gallery pages have nothing to show.
 
 import { readFile, writeFile, mkdir, rm, readdir, copyFile } from "fs/promises";
-import { existsSync } from "fs";
 import { createHash } from "crypto";
 import { execFileSync } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { authorProblems, widgetProblems, parseJson } from "./widget-rules.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -49,22 +49,13 @@ const { REPO_URL } = await import("file://" + join(docs, "config.js").replace(/\
 const repo = REPO_URL.replace(/\/+$/, "").split("/");
 const SITE = `https://${repo[repo.length - 2]}.github.io/${repo[repo.length - 1]}`;
 
-// The same limits the app and the pull request checks hold a widget to. A widget that breaks one
-// stops the build: publishing a gallery with a hole in it would look like the widget was removed.
-const PART = /^[a-z0-9-]+$/;
-const CATEGORIES = ["clocks", "productivity", "weather", "system", "media", "developer", "sports",
-  "finance", "news", "utility", "social", "health", "travel", "games"];
-const MAX_SOURCE = 524288, MAX_PREVIEW = 105000;
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
 const esc = s => String(s ?? "")
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 const folders = async dir => (await readdir(dir, { withFileTypes: true }))
   .filter(e => e.isDirectory()).map(e => e.name).sort();
-const readJson = async path => JSON.parse(await readFile(path, "utf8"));
-const wholeNumber = n => Number.isInteger(n) && n >= 1;
+const readJson = async path => parseJson(await readFile(path, "utf8").catch(() => ""));
 
 // When the widget's source last changed on main: the day it was merged, which is its review.
 function mergedAt(path) {
@@ -117,35 +108,28 @@ function pageFor(template, w, hasPreview) {
 
 // Widgets that came from the old database keep the date they were reviewed there, and must still
 // be the bytes that were reviewed there, for as long as they stay on that version.
-const migrated = existsSync(join(source, "migrated.json")) ? await readJson(join(source, "migrated.json")) : {};
+const migrated = await readJson(join(source, "migrated.json")) || {};
 
 const widgets = [], authors = [];
+// A widget that breaks a rule (tools/widget-rules.mjs) stops the build: publishing a gallery with
+// a hole in it would look like the widget had been removed.
 for (const author of await folders(source)) {
-  if (!PART.test(author)) throw new Error(`widgets/${author}: an author folder is lowercase letters, digits and hyphens`);
   const who = await readJson(join(source, author, "author.json"));
-  authors.push({ username: author, github: String(who.github || ""), bio: String(who.bio || "").slice(0, 160) });
+  const wrong = authorProblems(who);
+  if (wrong.length) throw new Error(`widgets/${author}: ${wrong.join("; ")}`);
+  authors.push({ username: author, github: who.github, bio: who.bio });
 
   for (const slug of await folders(join(source, author))) {
     const dir = join(source, author, slug), id = `u.${author}.${slug}`, at = `widgets/${author}/${slug}`;
-    const fail = why => { throw new Error(`${at}: ${why}`); };
-    if (!PART.test(slug) || slug.length > 36 || id.length > 64) fail("the folder name is not a usable widget id");
-
     const meta = await readJson(join(dir, "meta.json"));
-    if (typeof meta.name !== "string" || meta.name.length < 1 || meta.name.length > 40) fail("name must be 1 to 40 characters");
-    if (!CATEGORIES.includes(meta.category)) fail(`category must be one of: ${CATEGORIES.join(", ")}`);
-    if (typeof meta.description !== "string" || meta.description.length > 120) fail("description must be at most 120 characters");
-    if (!wholeNumber(meta.api_version) || !wholeNumber(meta.version)) fail("api_version and version must be whole numbers from 1");
+    const code = await readFile(join(dir, "widget.cs")).catch(() => null);
+    const preview = await readFile(join(dir, "preview.png")).catch(() => null);
+    const problems = widgetProblems({ author, slug, meta, code, preview });
+    if (problems.length) throw new Error(`${at}: ${problems.join("; ")}`);
 
-    const code = await readFile(join(dir, "widget.cs"));
-    if (!code.length || code.length > MAX_SOURCE) fail(`widget.cs must be 1 to ${MAX_SOURCE} bytes`);
     const sha256 = createHash("sha256").update(code).digest("hex");
-
     const was = Object.hasOwn(migrated, id) && migrated[id].version === meta.version ? migrated[id] : null;
-    if (was && was.sha256 !== sha256) fail(`widget.cs changed but version is still ${meta.version}`);
-
-    const previewPath = join(dir, "preview.png");
-    const preview = existsSync(previewPath) ? await readFile(previewPath) : null;
-    if (preview && (preview.length > MAX_PREVIEW || !preview.subarray(0, 8).equals(PNG_SIGNATURE))) fail(`preview.png must be a PNG of at most ${MAX_PREVIEW} bytes`);
+    if (was && was.sha256 !== sha256) throw new Error(`${at}: widget.cs changed but version is still ${meta.version}`);
 
     widgets.push({
       id, version: meta.version, name: meta.name, category: meta.category, description: meta.description,

@@ -1,0 +1,52 @@
+name: Widget checks
+
+# Checks a pull request that adds or changes a community widget (widgets/), before review:
+# the author stays in their own folder, the widget follows the rules, and it compiles against
+# the app (tools/check-widget-pr.mjs, tools/compile-widgets.ps1).
+#
+# Why pull_request_target: these checks decide whether a stranger's change is safe to look at,
+# so they must be the ones on main. Under a plain pull_request the workflow and the scripts come
+# from the pull request itself, which could rewrite them to pass.
+#
+# What keeps that safe: the pull request is never checked out and nothing from it is ever run.
+# The job checks out main, builds the app from main, and reads the pull request's files out of
+# git as data. The widget source is compiled, not executed. The token can only read, and no
+# secret is used. Keep it that way: never add a step that runs a file from the pull request.
+
+on:
+  pull_request_target:
+    paths: ["widgets/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: widgets-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check the widget
+    runs-on: windows-latest
+    steps:
+      # main, with its history: the script needs the commit the pull request branched from.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the pull request, without checking it out
+        run: git fetch --no-tags origin "+refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/pr/head"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Folder, rules and version
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+        run: node tools/check-widget-pr.mjs HEAD refs/remotes/pr/head --extract "${{ runner.temp }}\widget-sources"
+      - name: Build the app from main
+        shell: cmd
+        run: build.bat
+      - name: Compile the widget against it
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\compile-widgets.ps1 "${{ runner.temp }}\widget-sources"

@@ -165,6 +165,14 @@ and not committed: `.github/workflows/pages.yml` builds it on every publish, and
 `docs/` locally you run the script once. `widgets/**/*.cs` is never line-ending converted
 (`.gitattributes`), because the hash is taken from the file's bytes.
 
+A widget is added or updated by pull request, and merging it is the review. The rules for a
+widget are in `tools/widget-rules.mjs`, used by both the gallery build and the pull request
+check (`.github/workflows/widgets.yml`): a contributor changes only the author folder whose
+`author.json` names their GitHub account, `version` goes up by one exactly when `widget.cs`
+changes, and the widget compiles against the app built from `main`. That workflow runs on
+`pull_request_target` and treats the pull request as data; never add a step to it that checks
+out or runs a file from the pull request.
+
 Until the website and the app read `gallery.json`, they still read Supabase, with previews
 coming from `docs/w/` (`getPreviews` in `docs/assets/data.js`). Never fetch `preview` (or a full
 `avatar`) from Supabase in a list or on every page view: that exhausted the free plan's 5 GB
