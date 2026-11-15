@@ -293,5 +293,37 @@ check('explore still hides source while carrying counts', ok(r) && !('source' in
   JSON.stringify(r.error || Object.keys(r.rows[0])));
 
 
+// ---------------------------------------------------------------- the gallery, closed (freeze.sql)
+// Last, because nothing above could run after it. A version is left waiting first, to show it
+// can no longer be approved.
+check('bob creates a widget before the freeze', ok(await as('bob', `insert into public.widgets (id, owner, slug) values ('u.bob.late', $1, 'late')`, [U.bob])));
+check('...and uploads a version that waits', ok(await upload('bob', 'u.bob.late', src1)));
+
+const freeze = readFileSync(new URL('../freeze.sql', import.meta.url), 'utf8');
+await db.exec(freeze);
+await db.exec(freeze); // re-runnable
+check('freeze applies twice', true);
+
+r = await as('alice', `insert into public.widgets (id, owner, slug) values ('u.alice.frozen', $1, 'frozen')`, [U.alice]);
+check('frozen: nobody can create a widget', !ok(r), r.error);
+r = await upload('alice', 'u.alice.moon', src2 + ' // after the freeze');
+check('frozen: an owner cannot upload a new version', !ok(r), r.error);
+r = await as('owner', `select public.approve('u.bob.late', 1, $1)`, [hash(src1)]);
+check('frozen: a waiting version cannot be approved', !ok(r), r.error);
+r = await as('anon', `select public.request_access('late@example.com')`);
+check('frozen: nobody can ask for an account', !ok(r), r.error);
+
+r = await as('anon', `select id, version from public.explore where id = 'u.alice.moon'`);
+check('frozen: Explore still reads', ok(r) && r.rows.length === 1, JSON.stringify(r.rows || r.error));
+r = await as('anon', `select source, sha256 from public.versions where widget_id = 'u.alice.moon' and status = 'approved'`);
+check('frozen: an approved version still installs', ok(r) && r.rows.length >= 1 && r.rows.every(v => v.source && v.sha256),
+  r.error || r.rows.length + ' rows');
+check('frozen: installs are still counted', ok(await as('anon', `select public.record_install('u.alice.moon')`)));
+r = await as('bob', `insert into public.likes (widget_id, user_id) values ('u.alice.moon', $1) on conflict do nothing`, [U.bob]);
+check('frozen: likes still work', ok(r), r.error);
+
+await db.exec(schema);
+check('schema.sql undoes the freeze', ok(await upload('alice', 'u.alice.moon', src2 + ' // after the thaw')));
+
 console.log(fails ? fails + ' FAILED' : 'all passed');
 process.exit(fails ? 1 : 0);

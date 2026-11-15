@@ -149,6 +149,9 @@ The source's SHA-256 must match the reviewed hash from the gallery.
 
 - `schema.sql` — Supabase Postgres schema (RLS, `explore` view, `versions` table).
 - `test/schema.test.mjs` — PGlite tests for RLS and schema rules. Every new DB rule needs a test.
+- `freeze.sql` — closes the Supabase gallery to uploads, approvals and account requests, while
+  older copies of the app keep reading it. Run by hand in the Supabase SQL editor; running
+  `schema.sql` again undoes it. The whole folder goes when the Supabase project is deleted.
 
 ### Website (`docs/`)
 
