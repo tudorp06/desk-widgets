@@ -20,9 +20,24 @@ light and dark themes.
 
 ## Releases
 
-Cutting one: `tools\set-version.ps1 1.8.8`, commit, merge, then create the release as a **draft**
-with its notes. `.github/workflows/release.yml` builds the assets and attaches them; then publish
-it. The workflow refuses a tag that does not match the version in the files, and a package whose
+Cutting one, so the release is complete the moment it goes public:
+
+```
+tools\set-version.ps1 1.8.8                               # then commit and merge to main
+git fetch origin && git push origin origin/main:refs/tags/v1.8.8
+gh release create v1.8.8 --draft --verify-tag --title v1.8.8 --notes "..."
+gh workflow run release.yml -f tag=v1.8.8                 # builds the assets, attaches them to the draft
+gh release edit v1.8.8 --draft=false --latest             # once that run is green
+```
+
+The tag is pushed and the workflow started by hand because GitHub does neither for a draft: a
+draft has no tag until it is published, and it fires no release event, so nothing builds on its
+own. Publishing does fire the workflow, which rebuilds from the same tag and replaces the three
+assets with equivalent ones; that second run is expected. (Publishing a release in one go, with
+no draft, also works, but the download links point at a release with no files for the few
+minutes the build takes.)
+
+The workflow refuses a tag that does not match the version in the files, and a package whose
 identity or version is wrong, so a hand-built or test package cannot reach a release.
 
 Every GitHub release carries all four of these, built from the same commit:
