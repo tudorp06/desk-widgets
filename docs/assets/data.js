@@ -1,208 +1,69 @@
-// The gallery's data layer. Callers ask for widgets, profiles and previews and never learn where
-// the rows came from.
+// The gallery's data layer. Callers ask for widgets, authors, previews and source and never
+// learn where they came from.
 //
-// On a dev host (localhost, 127.0.0.1, [::1] or a file:// page) these are the sample rows, because
-// config.js ships with keys for a project that is not connected yet -- so "are there keys?" cannot
-// tell us anything. Add ?live=1 to a dev URL to use the real queries instead.
-//
-// Anywhere else, the rows are always real: the published site has no dev host, so it can never
-// serve sample data, and with no keys it reports "not connected", as before.
-import { supabase, configured, me, restQuery, isUsername, previewSrc } from "./site.js";
-
-const DEV = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === "file:";
-const LIVE = new URLSearchParams(location.search).has("live");
-export const usingMocks = DEV && !LIVE;
-export const available = configured || usingMocks;
-// The same switch under another name, for pages that stub auth rather than rows.
-export const usingStub = usingMocks;
-
-const stubAnnounced = new Set();
-export function stubbed(label = "auth", ms = 600) {
-  if (!stubAnnounced.has(label)) { stubAnnounced.add(label); console.log("[" + label + "] using stub"); }
-  return new Promise((done) => setTimeout(done, ms));
-}
+// It all comes from files on this site, built from the widgets/ folder of the repository by
+// tools/build-widget-pages.mjs: w/gallery.json lists every widget and author, and each widget
+// has w/<id>/preview.png and w/<id>/source.cs. There is no database and nothing to sign in to.
+// To see the gallery on a dev host, run that script once before serving docs/.
+import { isValidId, isAuthor } from "./site.js";
 
 const TIMEOUT = 10000;      // every call fails rather than hanging the loading state
-const MOCK_DELAY = 400;     // so the loading state is still visible while working on it
 
-function withTimeout(work) {
-  return Promise.race([
-    work,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), TIMEOUT)),
-  ]);
-}
+const file = path => new URL("../w/" + path, import.meta.url);
 
-let announced = false;
-let mockModule = null;
-function mocks() {
-  if (!announced) {
-    announced = true;
-    console.log("[explore] using mock data");
+// gallery.json, asked for once per page however many callers there are. A failed read is not
+// kept, so a retry asks again.
+let loaded = null;
+function gallery() {
+  if (!loaded) {
+    loaded = fetch(file("gallery.json"), { signal: AbortSignal.timeout(TIMEOUT) })
+      .then((response) => {
+        if (!response.ok) throw new Error(response.status + " " + response.statusText);
+        return response.json();
+      })
+      .then((g) => ({
+        widgets: (Array.isArray(g.widgets) ? g.widgets : []).filter((w) => w && isValidId(w.id) && isAuthor(w.author)),
+        authors: (Array.isArray(g.authors) ? g.authors : []).filter((a) => a && isAuthor(a.username)),
+      }));
+    loaded.catch(() => { loaded = null; });
   }
-  // Imported here, so the file is never requested by the published site.
-  if (!mockModule) mockModule = import("./mock-data.js");
-  return Promise.all([mockModule, new Promise((done) => setTimeout(done, MOCK_DELAY))])
-    .then(([module]) => module);
+  return loaded;
 }
 
-const WIDGET_COLUMNS = "id, version, name, category, description, api_version, sha256, reviewed_at, author";
-
-// The newest approved version of every widget, newest first.
+// Every widget, newest first: id, version, name, category, description, api_version, sha256,
+// reviewed_at, author, preview (whether it has a picture).
 export async function getWidgets() {
-  if (usingMocks) return withTimeout(mocks().then((m) => m.widgets.slice()));
-  return restQuery("explore?" + new URLSearchParams({ select: WIDGET_COLUMNS, order: "reviewed_at.desc" }));
+  return (await gallery()).widgets.slice();
 }
 
-// The authors view with the small photo (avatar_thumb), or without any photo on a database
-// from before that column. Never the photo itself: those run to megabytes each.
-async function authors(filter = {}) {
-  const ask = (select) => restQuery("authors?" + new URLSearchParams(Object.assign({ select }, filter)));
-  try { return await ask("username,bio,avatar_thumb"); }
-  catch (e) { return ask("username,bio"); }
+// One widget by id, or null.
+export async function getWidget(id) {
+  if (!isValidId(id)) return null;
+  return (await gallery()).widgets.find((w) => w.id === id) || null;
 }
 
-// Everyone with a profile: username, bio, avatar_thumb.
+// Every author: username, github, bio, avatar (a file name in w/avatars/, or null).
 export async function getProfiles() {
-  if (usingMocks) return withTimeout(mocks().then((m) => m.profiles.slice()));
-  return authors();
+  return (await gallery()).authors.slice();
 }
 
-// A single author's profile by username, or null.
+// A single author by username, or null.
 export async function getProfile(username) {
-  if (!isUsername(username)) return null;
-  if (usingMocks) return withTimeout(mocks().then((m) => (m.profiles || []).find((p) => p.username === username) || null));
-  const rows = await authors({ username: "eq." + username, limit: "1" });
-  return rows.length ? rows[0] : null;
+  if (!isAuthor(username)) return null;
+  return (await gallery()).authors.find((a) => a.username === username) || null;
 }
 
-// One person's photo itself (base64, possibly a multi-megabyte animation), or null. Asked for
-// on its own and given a minute, after the page that wants it is already showing. onlyIfNoThumb
-// is for lists: it answers null for anyone whose small copy is enough.
-export async function getPhoto(username, onlyIfNoThumb = false) {
-  if (usingMocks || !isUsername(username)) return null;
-  const query = { select: "avatar", username: "eq." + username, avatar: "not.is.null", limit: "1" };
-  if (onlyIfNoThumb) query.avatar_thumb = "is.null";
-  const rows = await restQuery("authors?" + new URLSearchParams(query), 60000);
-  return rows.length ? rows[0].avatar : null;
+// id -> an <img> src (or null for no preview), for widgets as getWidgets answers them. The
+// version in the address makes a new version's picture a new URL, past any cache.
+export async function getPreviews(widgets) {
+  return new Map(widgets.map((w) => [w.id, w.preview
+    ? file(encodeURIComponent(w.id) + "/preview.png?v=" + encodeURIComponent(w.version)).href : null]));
 }
 
-// Previews are files on this site (w/<id>/preview.png), not database reads: they are ~100 KB
-// each, and fetching them through the database API on every visit used up its egress quota.
-// tools/build-widget-pages.mjs exports them and lists what it exported in w/previews.json:
-// id -> { version, preview }. Unreadable means empty, and every preview comes from the database.
-let published = null;
-function publishedPreviews() {
-  if (!published) published = fetch(new URL("../w/previews.json", import.meta.url), { signal: AbortSignal.timeout(TIMEOUT) })
-    .then((response) => (response.ok ? response.json() : {}))
-    .catch(() => ({}));
-  return published;
-}
-
-// id -> an <img> src (or null for no preview), for widgets given as { id, version }. The file
-// when that exact version has been exported; the database only for one approved since then.
-// The version in the address makes a new version's picture a new URL, past any cache.
-export async function getLivePreviews(widgets) {
-  const files = await publishedPreviews();
-  const out = new Map(), ask = [];
-  for (const w of widgets) {
-    const file = files && Object.hasOwn(files, w.id) ? files[w.id] : null;
-    if (!file || file.version !== w.version) ask.push(w.id);
-    else out.set(w.id, file.preview
-      ? new URL("../w/" + encodeURIComponent(w.id) + "/preview.png?v=" + encodeURIComponent(w.version), import.meta.url).href
-      : null);
-  }
-  if (ask.length) {
-    const data = await restQuery("explore?" + new URLSearchParams({ select: "id,preview", id: "in.(" + ask.join(",") + ")" }));
-    for (const row of data) out.set(row.id, previewSrc(row.preview));
-  }
-  return out;
-}
-
-// The same, or the sample pictures on a dev host.
-export async function getPreviews(widgets, basePath) {
-  if (!widgets.length) return new Map();
-  if (!usingMocks) return getLivePreviews(widgets);
-  const samples = await withTimeout(mocks().then((m) => m.previewsFor(widgets.map((w) => w.id), basePath)));
-  return new Map([...samples].map(([id, preview]) => [id, previewSrc(preview)]));
-}
-
-export async function usernameTaken(username) {
-  if (!isUsername(username)) throw new Error("not a username");
-  if (usingMocks) return withTimeout(mocks().then((module) =>
-    username === "taken" || module.profiles.some((profile) => profile.username === username)));
-  const rows = await restQuery("authors?" + new URLSearchParams({ select: "username", username: "eq." + username, limit: "1" }));
-  return rows.length > 0;
-}
-
-// ---- the upload page: who is signed in, and what they have sent ----
-
-// { user, profile } or null. In mock mode, a sample account, so the signed-in page can be worked
-// on without a database.
-// The sample account, or null when not using sample data. site.js calls this so the nav shows
-// the avatar on every page while the database is not connected.
-export async function sampleSession() {
-  if (!usingMocks) return null;
-  return (await mocks()).session;
-}
-
-export async function getSession() {
-  if (usingMocks) return withTimeout(mocks().then((m) => m.session));
-  return withTimeout(me());
-}
-
-export async function getMyWidgets(userId) {
-  if (usingMocks) return withTimeout(mocks().then((m) => m.myWidgets.slice()));
-  return withTimeout((async () => {
-    const db = await supabase();
-    const { data, error } = await db.from("widgets").select("id, slug").eq("owner", userId).order("id");
-    if (error) throw error;
-    return data || [];
-  })());
-}
-
-export async function getMyVersions() {
-  if (usingMocks) return withTimeout(mocks().then((m) => m.myVersions.slice()));
-  return withTimeout((async () => {
-    const db = await supabase();
-    const { data, error } = await db.from("versions")
-      .select("widget_id, version, name, category, description, status, created_at")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data || [];
-  })());
-}
-
-// True when that widget id already exists. Row-level security hides other people's unapproved
-// widgets, so this catches the common cases and the insert is still the final word.
-export async function idTaken(id) {
-  if (usingMocks) return withTimeout(mocks().then((m) => m.myWidgets.some((w) => w.id === id)));
-  const db = await supabase();
-  const { data } = await db.from("widgets").select("id").eq("id", id).maybeSingle();
-  return Boolean(data);
-}
-
-// Both return { error } exactly as the Supabase client does, so callers read one shape.
-export async function createWidget(row) {
-  if (usingMocks) return mocks().then((m) => { m.myWidgets.push({ id: row.id, slug: row.slug }); return {}; });
-  const db = await supabase();
-  return db.from("widgets").insert(row);
-}
-
-export async function createVersion(row) {
-  if (usingMocks) return mocks().then((m) => {
-    m.myVersions.unshift(Object.assign({ version: 1, status: "pending", created_at: new Date().toISOString() }, row));
-    return {};
-  });
-  const db = await supabase();
-  return db.from("versions").insert(row);
-}
-
-export async function deleteWidget(id) {
-  if (usingMocks) return mocks().then((m) => {
-    const at = m.myWidgets.findIndex((w) => w.id === id);
-    if (at >= 0) m.myWidgets.splice(at, 1);
-    return {};
-  });
-  const db = await supabase();
-  return db.rpc("delete_widget", { p_widget: id });
+// The widget's C# source: the bytes its sha256 in the gallery was taken from.
+export async function getSource(w) {
+  const response = await fetch(file(encodeURIComponent(w.id) + "/source.cs?v=" + encodeURIComponent(w.version)),
+    { signal: AbortSignal.timeout(TIMEOUT) });
+  if (!response.ok) throw new Error(response.status + " " + response.statusText);
+  return response.text();
 }

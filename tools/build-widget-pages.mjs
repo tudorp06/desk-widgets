@@ -15,6 +15,7 @@
 //   docs/w/<id>/source.cs        the bytes that SHA-256 was taken from
 //   docs/w/<id>/preview.png
 //   docs/w/<id>/index.html       the widget's own shareable page
+//   docs/w/avatars/<author>.*    each author's GitHub picture, so the site never asks GitHub
 //
 // Why a page per widget: docs/widget.html is a single file that reads ?id= in the browser, so
 // every widget link unfurls with the same title and the same picture. Crawlers do not run the
@@ -156,9 +157,29 @@ for (const w of widgets) {
   if (w.preview) await copyFile(join(w.dir, "preview.png"), join(dir, "preview.png"));
 }
 
+// Each author's picture, copied from GitHub once per build so that a visitor's browser never
+// contacts GitHub to show it. A picture that cannot be fetched is left out, and the site draws
+// the author's initial instead: the gallery must still publish when GitHub is slow.
+const PICTURE_TYPES = [["png", [0x89, 0x50, 0x4e, 0x47]], ["jpg", [0xff, 0xd8, 0xff]], ["gif", [0x47, 0x49, 0x46, 0x38]], ["webp", [0x52, 0x49, 0x46, 0x46]]];
+async function picture(login) {
+  try {
+    const res = await fetch(`https://github.com/${encodeURIComponent(login)}.png?size=240`, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const type = PICTURE_TYPES.find(([, magic]) => magic.every((b, i) => bytes[i] === b));
+    return type && bytes.length <= 1024 * 1024 ? { ext: type[0], bytes } : null;
+  } catch (e) { return null; }
+}
+await mkdir(join(outRoot, "avatars"), { recursive: true });
+await Promise.all(authors.map(async a => {
+  const found = a.github ? await picture(a.github) : null;
+  a.avatar = found ? `${a.username}.${found.ext}` : null;
+  if (found) await writeFile(join(outRoot, "avatars", a.avatar), found.bytes);
+}));
+
 const listed = widgets.map(({ dir, ...w }) => w);
 await writeFile(join(outRoot, "gallery.json"), JSON.stringify({ widgets: listed, authors }, null, 1) + "\n");
 await writeFile(join(outRoot, "previews.json"), JSON.stringify(Object.fromEntries(
   widgets.map(w => [w.id, { version: w.version, preview: w.preview }]).sort(([a], [b]) => a.localeCompare(b))), null, 1) + "\n");
 
-console.log(`${widgets.length} widgets by ${authors.length} authors written to docs/w/.`);
+console.log(`${widgets.length} widgets by ${authors.length} authors written to docs/w/ (${authors.filter(a => a.avatar).length} author picture(s)).`);

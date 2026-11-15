@@ -28,8 +28,10 @@ const root = join(here, "..");
 const out = join(root, "widgets");
 const exportedDir = join(root, "docs", "w");
 
-const { SUPABASE_URL, SUPABASE_ANON_KEY } = await import(
-  "file://" + join(root, "docs", "config.js").replace(/\\/g, "/"));
+// The old gallery, and its publishable key: public by design there, every permission was row
+// level security. The website no longer knows either.
+const SUPABASE_URL = "https://vtgsbgkjleyqlxgjdvqy.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_7-z7D1GwtQJumqAPFxlJlA_d3myO4gk";
 
 const ID_PATTERN = /^u\.[a-z0-9-]+\.[a-z0-9-]+$/;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

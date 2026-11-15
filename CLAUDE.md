@@ -153,14 +153,18 @@ The source's SHA-256 must match the reviewed hash from the gallery.
 ### Website (`docs/`)
 
 Static site served by GitHub Pages from `main`. `docs/assets/site.js` has the shared JS;
-individual pages (explore, upload, profile, admin, login, etc.) are self-contained HTML.
-`docs/config.js` has the publishable Supabase key.
+individual pages (explore, widget, profile, develop, etc.) are self-contained HTML. The site
+has no accounts and no database: `docs/assets/data.js` reads `docs/w/gallery.json` and the files
+beside it. `upload.html`, `account.html`, `admin.html`, `login.html` and `password.html` are
+redirects to the publishing guide (`develop.html#publish`), kept because older copies of the
+app and old links still open them.
 
-The gallery is moving out of Supabase and into the repository. Every community widget lives in
+The gallery is moving out of Supabase and into the repository; the website has already moved. Every community widget lives in
 `widgets/<author>/<slug>/` (`widget.cs`, `preview.png`, `meta.json`; one `author.json` per
 author) and its id is `u.<author>.<slug>`. `tools/build-widget-pages.mjs` builds `docs/w/` from
 that folder: `gallery.json` (every widget with the SHA-256 of its source, and every author),
-`previews.json`, and per widget its page, `preview.png` and `source.cs`. `docs/w/` is generated
+`previews.json`, each author's GitHub picture (`avatars/`, so visitors never contact GitHub),
+and per widget its page, `preview.png` and `source.cs`. `docs/w/` is generated
 and not committed: `.github/workflows/pages.yml` builds it on every publish, and before serving
 `docs/` locally you run the script once. `widgets/**/*.cs` is never line-ending converted
 (`.gitattributes`), because the hash is taken from the file's bytes.
@@ -173,11 +177,9 @@ changes, and the widget compiles against the app built from `main`. That workflo
 `pull_request_target` and treats the pull request as data; never add a step to it that checks
 out or runs a file from the pull request.
 
-Until the website and the app read `gallery.json`, they still read Supabase, with previews
-coming from `docs/w/` (`getPreviews` in `docs/assets/data.js`). Never fetch `preview` (or a full
-`avatar`) from Supabase in a list or on every page view: that exhausted the free plan's 5 GB
-egress once. A widget approved in Supabase in the meantime is brought over with
-`node tools/export-gallery.mjs`.
+Until the app reads `gallery.json` too, it still reads Supabase (`src/Community.cs`), so a
+widget that exists only in `widgets/` shows on the website but an installed app cannot get it
+yet. `tools/export-gallery.mjs` is the one-off that copied the widgets out of Supabase.
 
 ## Performance expectations
 
