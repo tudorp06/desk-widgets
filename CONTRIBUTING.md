@@ -2,12 +2,15 @@
 
 Thanks for helping. There are two ways to add to Desk Widgets.
 
-## A widget of your own: upload it, no pull request needed
+## A widget of your own: a pull request to `widgets/`
 
 Most widgets belong in the community gallery, not in the app. Write one C# file (start from
-`samples/HelloWidget.cs`), test it with Installed › Install from File…, then
-[request access](https://whoissaaif.github.io/desk-widgets/upload.html). Once you're invited,
-upload it from the website or the app. The owner reads every version before it appears in Explore.
+`samples/HelloWidget.cs`), test it with Installed › Install from File…, then open a pull request
+that adds it to `widgets/<your GitHub username>/<widget name>/` with a `preview.png` and a
+`meta.json`. The [publishing guide](https://whoissaaif.github.io/desk-widgets/develop.html#publish)
+has the exact files. The pull request is checked automatically (your own folder only, the widget
+rules, and that it compiles), and a maintainer reads every version before merging it. It appears
+in Explore a few minutes after the merge. None of the steps below apply to a widget.
 
 ## Changes to the app, website or server: a pull request
 
