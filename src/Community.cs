@@ -1,57 +1,61 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
 namespace DeskWidgets
 {
-    // The online half of community widgets: reads approved widgets from Supabase with the public
-    // anon key (row level security lets it read approved rows and nothing else), and installs them
-    // after the same hash check and prompt as a local file. The app never signs in.
+    // The online half of community widgets. The gallery is a set of files on the website, built
+    // from the widgets/ folder of the repository (tools/build-widget-pages.mjs): w/gallery.json
+    // lists every widget with the SHA-256 of its source, and each widget has w/<id>/source.cs and
+    // w/<id>/preview.png. A widget is there because a pull request for it was reviewed and merged.
+    // The app only reads: there is no account, and nothing is sent about what was installed.
+    // Installing runs the same hash check and prompt as a local file.
     static class Community
     {
-        // Public by design (server/README.md). Empty until the backend is set up.
-        public const string Url = "https://vtgsbgkjleyqlxgjdvqy.supabase.co";
-        public const string AnonKey = "sb_publishable_7-z7D1GwtQJumqAPFxlJlA_d3myO4gk";
         public const string Website = "https://whoissaaif.github.io/desk-widgets/";
+        const string Gallery = Website + "w/";
 
-        public static bool Configured { get { return Url.Length > 0 && AnonKey.Length > 0; } }
+        public static bool Configured { get { return Website.Length > 0; } }
+
+        static Community()
+        {
+            // Previews are small files fetched a few at a time; the default is two connections a host.
+            try { ServicePointManager.FindServicePoint(new Uri(Website)).ConnectionLimit = 6; }
+            catch (Exception) { }
+        }
 
         public sealed class Listing
         {
             public string Id, Name, Category, Description, Author;
+            public string Sha256;    // of w/<id>/source.cs; null in a list kept by an older version of the app
+            public string Reviewed;  // when it was merged, as the gallery wrote it
             public int Version, Api;
-            public int Installs, Likes;
+            public bool HasPreview;
         }
 
         // ---- reading ----
 
-        // The apikey header alone reads public rows with either key type. A classic anon key is a
-        // JWT and may also go in Authorization; a newer publishable key (sb_publishable_...) must not.
-        static Dictionary<string, string> AnonHeaders()
-        {
-            var h = new Dictionary<string, string> { { "apikey", AnonKey } };
-            if (AnonKey.StartsWith("eyJ")) h["Authorization"] = "Bearer " + AnonKey;
-            return h;
-        }
-
-        static object[] Query(string pathAndQuery) { return Parse(QueryText(pathAndQuery)); }
-
-        static string QueryText(string pathAndQuery)
-        {
-            return Encoding.UTF8.GetString(Http.GetBytes(Url.TrimEnd('/') + "/rest/v1/" + pathAndQuery, AnonHeaders()));
-        }
-
+        // The widgets in gallery.json. A list kept on disk by an older version of the app is a
+        // bare array of the same rows, and reads the same way.
         static object[] Parse(string json)
         {
-            var parsed = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 }.DeserializeObject(json) as object[];
-            if (parsed == null) throw new FormatException("Unexpected answer from the gallery.");
-            return parsed;
+            object parsed = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 }.DeserializeObject(json);
+            var whole = parsed as Dictionary<string, object>;
+            object widgets;
+            if (whole != null && whole.TryGetValue("widgets", out widgets)) parsed = widgets;
+            var rows = parsed as object[];
+            if (rows == null) throw new FormatException("Unexpected answer from the gallery.");
+            return rows;
         }
 
         static string Text(object row, string key)
@@ -65,6 +69,13 @@ namespace DeskWidgets
         {
             int n;
             return int.TryParse(Text(row, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out n) ? n : 0;
+        }
+
+        // A widget's file in the gallery. The version in the address makes a new version a new
+        // URL, past any cache between here and the site; the id is validated before it gets here.
+        static string FileUrl(Listing l, string name)
+        {
+            return Gallery + l.Id + "/" + name + "?v=" + l.Version.ToString(CultureInfo.InvariantCulture);
         }
 
         // ---- the Explore list, kept ----
@@ -100,11 +111,11 @@ namespace DeskWidgets
             }
         }
 
-        // The newest approved version of every widget, from the gallery. Call from a background thread.
+        // Every widget in the gallery, newest first. Call from a background thread.
         public static List<Listing> Explore()
         {
-            // Previews are fetched separately, once per version (Preview), so the list stays small.
-            string json = QueryText("explore?select=id,version,name,category,description,api_version,author,installs,likes&order=reviewed_at.desc");
+            // Previews are fetched separately, once per version (FetchPreviews), so the list stays small.
+            string json = Http.Get(Gallery + "gallery.json");
             List<Listing> list = Listings(Parse(json));
             lock (exploreLock) { exploreKept = new List<Listing>(list); exploreAsked = DateTime.UtcNow; }
             try
@@ -124,14 +135,16 @@ namespace DeskWidgets
                 {
                     Id = Text(r, "id"), Version = Number(r, "version"), Name = Text(r, "name") ?? "", Category = Text(r, "category"),
                     Description = Text(r, "description") ?? "", Author = Text(r, "author") ?? "", Api = Number(r, "api_version"),
-                    Installs = Number(r, "installs"), Likes = Number(r, "likes")
+                    Sha256 = Text(r, "sha256"), Reviewed = Text(r, "reviewed_at"),
+                    HasPreview = !string.Equals(Text(r, "preview"), "false", StringComparison.OrdinalIgnoreCase)
                 })
                 .Where(l => Plugins.IsValidId(l.Id) && l.Version > 0)
                 .ToList();
         }
 
-        // ---- previews: fetched once per approved version, then kept on disk ----
-        // An approved version never changes, so neither does its preview: the cache never goes stale.
+        // ---- previews: fetched once per version, then kept on disk ----
+        // A version never changes once it is published, so neither does its preview: the cache
+        // never goes stale.
 
         static readonly string PreviewDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskWidgets", "previews");
@@ -139,48 +152,38 @@ namespace DeskWidgets
         // File name for a version's preview; the id is validated and the version is a number.
         static string PreviewFile(Listing l, string ext) { return Path.Combine(PreviewDir, l.Id + "_" + l.Version + ext); }
 
-        // A version's preview from the disk cache, or the gallery the first time. Null when it has none.
-        // Call from a background thread.
-        public static Bitmap Preview(Listing l)
+        // One preview from the gallery, kept on disk for next time. A widget with no picture is
+        // remembered as such, so it isn't asked for every time; a failed download is not, so it
+        // is tried again.
+        static Bitmap DownloadPreview(Listing l)
         {
-            if (!Plugins.IsValidId(l.Id) || l.Version < 1) return null;
-            string png = PreviewFile(l, ".png"), none = PreviewFile(l, ".none");
-            try
-            {
-                if (File.Exists(none)) return null;
-                if (File.Exists(png))
-                {
-                    Bitmap cached = DecodePreview(File.ReadAllBytes(png)); // the disk is checked like the network
-                    if (cached != null) return cached;
-                    File.Delete(png);
-                }
-            }
-            catch (Exception) { }
-
-            string base64;
-            try
-            {
-                object[] rows = Query("versions?select=preview&widget_id=eq." + l.Id + "&version=eq." + l.Version + "&status=eq.approved");
-                base64 = rows.Length > 0 ? Text(rows[0], "preview") : null;
-            }
-            catch (Exception) { return null; } // offline: try again next time, nothing cached
             byte[] bytes = null;
-            if (!string.IsNullOrEmpty(base64) && base64.Length <= 140000)
-                try { bytes = Convert.FromBase64String(base64); } catch (FormatException) { }
+            bool none = !l.HasPreview;
+            if (!none)
+            {
+                try { bytes = Http.GetBytes(FileUrl(l, "preview.png")); }
+                catch (WebException e)
+                {
+                    var resp = e.Response as HttpWebResponse;
+                    if (resp == null || resp.StatusCode != HttpStatusCode.NotFound) return null; // offline: nothing cached
+                    none = true;
+                }
+                catch (Exception) { return null; }
+            }
             Bitmap bmp = bytes != null ? DecodePreview(bytes) : null;
             try
             {
                 Directory.CreateDirectory(PreviewDir);
-                if (bmp != null) File.WriteAllBytes(png, bytes);
-                else File.WriteAllBytes(none, new byte[0]); // remembered, so it isn't asked for every time
+                if (bmp != null) File.WriteAllBytes(PreviewFile(l, ".png"), bytes);
+                else File.WriteAllBytes(PreviewFile(l, ".none"), new byte[0]);
             }
             catch (Exception) { }
             return bmp;
         }
 
-        // All previews for a list of widgets: from disk cache when available, otherwise one batch
-        // query for all uncached previews instead of one HTTP request per widget. diskOnly never
-        // asks the gallery: a widget whose preview isn't on disk yet simply has none for now.
+        // All previews for a list of widgets: from the disk cache when it has them, otherwise from
+        // the gallery, a few at a time. diskOnly never asks the gallery: a widget whose preview
+        // isn't on disk yet simply has none for now. Call from a background thread.
         public static Dictionary<Listing, Bitmap> FetchPreviews(List<Listing> listings, bool diskOnly)
         {
             var result = new Dictionary<Listing, Bitmap>();
@@ -194,7 +197,7 @@ namespace DeskWidgets
                     if (File.Exists(none)) { result[l] = null; continue; }
                     if (File.Exists(png))
                     {
-                        Bitmap cached = DecodePreview(File.ReadAllBytes(png));
+                        Bitmap cached = DecodePreview(File.ReadAllBytes(png)); // the disk is checked like the network
                         if (cached != null) { result[l] = cached; continue; }
                         File.Delete(png);
                     }
@@ -205,34 +208,11 @@ namespace DeskWidgets
             if (diskOnly) foreach (var l in uncached) result[l] = null;
             else if (uncached.Count > 0)
             {
-                try
+                Parallel.ForEach(uncached, new ParallelOptions { MaxDegreeOfParallelism = 6 }, delegate(Listing l)
                 {
-                    object[] rows = Query("explore?select=id,version,preview&id=in.(" +
-                        string.Join(",", uncached.Select(u => u.Id)) + ")");
-                    var byId = new Dictionary<string, object>();
-                    foreach (var r in rows) { string id = Text(r, "id"); if (id != null) byId[id] = r; }
-                    Directory.CreateDirectory(PreviewDir);
-                    foreach (var l in uncached)
-                    {
-                        object row;
-                        string base64 = byId.TryGetValue(l.Id, out row) ? Text(row, "preview") : null;
-                        byte[] bytes = null;
-                        if (!string.IsNullOrEmpty(base64) && base64.Length <= 140000)
-                            try { bytes = Convert.FromBase64String(base64); } catch (FormatException) { }
-                        Bitmap bmp = bytes != null ? DecodePreview(bytes) : null;
-                        result[l] = bmp;
-                        try
-                        {
-                            if (bmp != null) File.WriteAllBytes(PreviewFile(l, ".png"), bytes);
-                            else File.WriteAllBytes(PreviewFile(l, ".none"), new byte[0]);
-                        }
-                        catch (Exception) { }
-                    }
-                }
-                catch (Exception)
-                {
-                    foreach (var l in uncached) result[l] = null;
-                }
+                    Bitmap bmp = DownloadPreview(l);
+                    lock (result) result[l] = bmp;
+                });
             }
             return result;
         }
@@ -269,7 +249,7 @@ namespace DeskWidgets
         // ---- deskwidgets://install/<id>/<version> ----
 
         // Any web page can open this URL, so it's only a request: the id and version are checked here,
-        // everything else is fetched from the database, and installing always asks first.
+        // everything else is fetched from the gallery, and installing always asks first.
         public static bool TryParseUrl(string url, out string id, out int version)
         {
             id = null;
@@ -292,72 +272,65 @@ namespace DeskWidgets
 
         public static void Install(string id, int version) { Install(id, version, null); }
 
-        // Fetches one approved version, checks it, asks, installs. Starts on the UI thread.
+        // Fetches the widget from the gallery, checks it, asks, installs. Starts on the UI thread.
+        // The gallery publishes one version of a widget, its latest, so that is what is installed;
+        // version is the one the link or the update asked for, and the prompt names the one it got.
         // dropAt is where a card dragged out of Explore was let go: once the person has said yes
         // and the widget is installed, one is placed there. Saying no places nothing.
         public static void Install(string id, int version, Point? dropAt)
         {
             if (!Plugins.IsValidId(id)) return;
-            if (!Configured)
-            {
-                AlertDialog.Show("Community widgets aren't connected yet.", "This copy of Desk Widgets doesn't know where the gallery is.");
-                return;
-            }
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string error = null;
-                object row = null;
-                string author = null;
+                Listing listing = null;
+                byte[] source = null;
                 try
                 {
-                    object[] rows = Query("versions?select=widget_id,version,name,category,description,api_version,source,sha256,status,reviewed_at" +
-                                          "&widget_id=eq." + id + "&version=eq." + version + "&status=eq.approved");
-                    row = rows.FirstOrDefault();
-                    if (row != null)
-                    {
-                        object[] who = Query("explore?select=author&id=eq." + id);
-                        author = who.Length > 0 ? Text(who[0], "author") : null;
-                    }
+                    listing = Explore().FirstOrDefault(l => l.Id == id);
+                    if (listing != null && listing.Version >= version) source = Http.GetBytes(FileUrl(listing, "source.cs"));
                 }
                 catch (Exception e) { error = "The gallery couldn't be reached. Check your connection and try again. (" + e.Message + ")"; }
                 App.RunOnUi(delegate
                 {
                     if (error != null) { AlertDialog.Show("Couldn't get the widget.", error); return; }
-                    if (row == null) { AlertDialog.Show("This widget isn't available.", "It may have been removed, or this version wasn't approved."); return; }
-                    Confirm(id, row, author, dropAt);
+                    if (listing == null) { AlertDialog.Show("This widget isn't available.", "It may have been removed from the gallery."); return; }
+                    // A version merged a moment ago: the site takes a few minutes to show it everywhere.
+                    if (source == null) { AlertDialog.Show("This version isn't available yet.", "It was just published. Try again in a few minutes."); return; }
+                    Confirm(listing, source, dropAt);
                 });
             });
         }
 
-        static void Confirm(string id, object row, string author, Point? dropAt)
+        static void Confirm(Listing l, byte[] bytes, Point? dropAt)
         {
-            string source = Text(row, "source") ?? "";
-            byte[] bytes = new UTF8Encoding(false).GetBytes(source);
-            string name = Text(row, "name") ?? id;
-            int version = Number(row, "version"), api = Number(row, "api_version");
-            // The guarantee: these bytes are the ones the owner approved.
-            if (Text(row, "widget_id") != id || Text(row, "status") != "approved" || Plugins.Sha256(bytes) != Text(row, "sha256"))
+            string name = l.Name.Length > 0 ? l.Name : l.Id;
+            // The guarantee: these bytes are the ones that were reviewed.
+            if (l.Sha256 == null || Plugins.Sha256(bytes) != l.Sha256)
             {
-                AlertDialog.Show(name + " wasn't installed.", "Its code doesn't match what was reviewed, so it wasn't installed.");
+                AlertDialog.Show(name + " wasn't installed.", "Its code doesn't match what was reviewed, so it wasn't installed. If it was just updated, try again in a few minutes.");
                 return;
             }
             if (bytes.Length > Plugins.MaxSourceBytes) { AlertDialog.Show(name + " wasn't installed.", "Its code is too large."); return; }
+            string source;
+            try { source = new UTF8Encoding(false, true).GetString(bytes); }
+            catch (ArgumentException) { AlertDialog.Show(name + " wasn't installed.", "Its code isn't readable text."); return; }
             string hidden = Plugins.HiddenCharacter(source); // the gallery refuses these too; don't rely on it
             if (hidden != null) { AlertDialog.Show(name + " wasn't installed.", Plugins.HiddenMessage(hidden)); return; }
-            if (api > PluginApi.Version)
+            if (l.Api > PluginApi.Version)
             {
                 AlertDialog.Show(name + " needs a newer Desk Widgets.", "Update Desk Widgets, then try again.");
                 return;
             }
 
-            PluginInfo old = Plugins.Get(id);
+            PluginInfo old = Plugins.Get(l.Id);
             DateTime reviewed;
-            bool hasDate = DateTime.TryParse(Text(row, "reviewed_at"), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out reviewed);
+            bool hasDate = DateTime.TryParse(l.Reviewed, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out reviewed);
             var facts = new List<KeyValuePair<string, string>>
             {
-                new KeyValuePair<string, string>("By", author ?? "unknown"),
-                new KeyValuePair<string, string>("Version", old == null ? version.ToString(CultureInfo.InvariantCulture)
-                    : version + " (replaces " + old.Version + ")"),
+                new KeyValuePair<string, string>("By", l.Author.Length > 0 ? l.Author : "unknown"),
+                new KeyValuePair<string, string>("Version", old == null ? l.Version.ToString(CultureInfo.InvariantCulture)
+                    : l.Version + " (replaces " + old.Version + ")"),
                 new KeyValuePair<string, string>("Reviewed", hasDate ? reviewed.ToLocalTime().ToString("d MMM yyyy", CultureInfo.CurrentCulture) : "yes"),
                 new KeyValuePair<string, string>("Size", (bytes.Length + 1023) / 1024 + " KB"),
             };
@@ -365,54 +338,32 @@ namespace DeskWidgets
 
             var p = new PluginInfo
             {
-                Id = id, Version = version, Api = api, Name = name, Category = Text(row, "category"),
-                Description = Text(row, "description"), Author = author, Sha256 = Text(row, "sha256")
+                Id = l.Id, Version = l.Version, Api = l.Api, Name = name, Category = l.Category,
+                Description = l.Description, Author = l.Author, Sha256 = l.Sha256
             };
             if (!Plugins.InstallChecked(p, bytes, name)) return;
-            RecordInstall(id);
             if (dropAt != null && p.Type != null) App.Current.AddWidget(p.Type, dropAt);
-        }
-
-        // Counted once the widget is really on the PC, not when its code was fetched: the source is
-        // downloaded to fill the confirm dialog, which the person may still cancel. Best effort and
-        // silent -- a widget that installed must never report a failure because a counter could not
-        // be reached, and the number is a ranking signal, not something anyone is owed.
-        static void RecordInstall(string id)
-        {
-            ThreadPool.QueueUserWorkItem(delegate
-            {
-                try
-                {
-                    Http.SendJson("POST", Url.TrimEnd('/') + "/rest/v1/rpc/record_install", AnonHeaders(),
-                                  new JavaScriptSerializer().Serialize(
-                                      new Dictionary<string, object> { { "p_widget", id } }));
-                }
-                catch (Exception) { }
-            });
         }
 
         // ---- updates ----
 
-        // Looks for newer approved versions of installed community widgets. Never installs them:
-        // a new version is new code, so the person decides (Installed shows Update).
+        // Looks for newer versions of installed community widgets. Never installs them: a new
+        // version is new code, so the person decides (Installed shows Update).
         public static void CheckForUpdates()
         {
-            if (!Configured) return;
-            var ids = Plugins.Installed.Where(p => p.Author != "local").Select(p => p.Id).ToList();
-            if (ids.Count == 0) return;
+            if (!Plugins.Installed.Any(p => p.Author != "local")) return;
             ThreadPool.QueueUserWorkItem(delegate
             {
-                object[] rows;
-                try { rows = Query("explore?select=id,version&id=in.(" + string.Join(",", ids) + ")"); }
+                List<Listing> list;
+                try { list = Explore(); }
                 catch (Exception) { return; } // offline: try again next time
                 App.RunOnUi(delegate
                 {
                     bool changed = false;
-                    foreach (var r in rows)
+                    foreach (var l in list)
                     {
-                        PluginInfo p = Plugins.Get(Text(r, "id") ?? "");
-                        int latest = Number(r, "version");
-                        if (p != null && latest > p.Version && p.UpdateVersion != latest) { p.UpdateVersion = latest; changed = true; }
+                        PluginInfo p = Plugins.Get(l.Id);
+                        if (p != null && p.Author != "local" && l.Version > p.Version && p.UpdateVersion != l.Version) { p.UpdateVersion = l.Version; changed = true; }
                     }
                     if (changed)
                     {
@@ -423,6 +374,34 @@ namespace DeskWidgets
                     }
                 });
             });
+        }
+
+        // ---- a preview to publish with ----
+
+        // A widget's snapshot as a PNG under 100 KB, the size the gallery takes, or null. It is
+        // what "Save Preview" writes, for the preview.png of a widget you are publishing.
+        public static byte[] PreviewPng(WidgetType type)
+        {
+            Bitmap shot = type != null ? type.Snapshot() : null;
+            if (shot == null) return null;
+            using (shot)
+                for (float scale = 1f; scale >= 0.25f; scale /= 2)
+                {
+                    int w = Math.Max(1, (int)(shot.Width * scale)), h = Math.Max(1, (int)(shot.Height * scale));
+                    if (w > 1024 || h > 1024) continue;
+                    using (var small = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+                    using (var ms = new MemoryStream())
+                    {
+                        using (var g = Graphics.FromImage(small))
+                        {
+                            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                            g.DrawImage(shot, 0, 0, w, h);
+                        }
+                        small.Save(ms, ImageFormat.Png);
+                        if (ms.Length <= 100 * 1024) return ms.ToArray();
+                    }
+                }
+            return null;
         }
     }
 }

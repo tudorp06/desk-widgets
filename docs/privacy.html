@@ -16,7 +16,7 @@
 
     <p>The Desk Widgets app has no analytics, no telemetry and no crash reporting. Nothing is
     sent anywhere to tell us that you installed it, opened it or used it. There is no account to
-    create unless you want to publish a widget. This website counts visits, which is described
+    create. This website counts visits, which is described
     below, and the two are entirely separate: the count cannot see the app, and the app never
     contacts the website.</p>
 
@@ -81,9 +81,9 @@
         <div class="t-reduced">The app asks GitHub for the latest release so it can tell you a
         new version exists. GitHub sees the request and your IP address.</div></div></div>
       <div class="row"><div class="main"><div class="t-headline">The widget gallery</div>
-        <div class="t-reduced">Browsing or installing a community widget is a read from our
-        Supabase database. No account is needed, and we keep no record of who installed
-        what.</div></div></div>
+        <div class="t-reduced">Browsing or installing a community widget downloads files from
+        this website, which GitHub hosts. GitHub sees the request and your IP address. No
+        account is needed, and nothing is sent about what you installed.</div></div></div>
     </div>
 
     <h2 class="block">Publishing a widget</h2>
@@ -99,9 +99,10 @@
     <p>This website used to have accounts for publishing widgets. It no longer does, and it
     collects nothing new. An account made before then is still held by Supabase, our former
     database provider: your email address, your username, and anything you put in your profile.
-    The app can still sign in to it, and when you do, the access token is stored encrypted on
-    your PC (%APPDATA%\DeskWidgets\account.dat). These accounts will be deleted when that
-    database is shut down; to have yours deleted sooner, ask at the address under Contact.</p>
+    Versions of the app before 1.9 could sign in to it, and kept the access token encrypted on
+    your PC (%APPDATA%\DeskWidgets\account.dat); the current app cannot sign in and deletes that
+    file. These accounts will be deleted when that database is shut down; to have yours deleted
+    sooner, ask at the address under Contact.</p>
 
     <p>In a browser, this site keeps one thing in local storage: your light or dark theme
     preference. It sets no cookies.</p>

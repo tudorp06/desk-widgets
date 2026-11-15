@@ -38,7 +38,7 @@ namespace DeskWidgets
         readonly List<WidgetCard> installedCards = new List<WidgetCard>();
         readonly List<PluginRow> turnedOff = new List<PluginRow>();
         readonly List<SidebarItem> nav = new List<SidebarItem>();
-        readonly SidebarItem settings, account, collapse;
+        readonly SidebarItem settings, collapse;
         // The sidebar narrows to a rail of icons (design/apple-design.md 17.3). Its text labels are
         // real controls, so they are hidden for the rail; the rows just lose their text.
         bool collapsed;
@@ -78,8 +78,8 @@ namespace DeskWidgets
             content.Controls.Add(installButton);
             noneInstalled = new EmptyState("No Installed Widgets", "Widgets you install from a file appear here.");
             content.Controls.Add(noneInstalled);
-            uploadButton = new PillButton("Upload a Widget…", ButtonStyle.Tinted);
-            uploadButton.Click += delegate { App.UploadWidget(null); };
+            uploadButton = new PillButton("Publish a Widget ↗", ButtonStyle.Tinted);
+            uploadButton.Click += delegate { App.PublishWidget(); };
             content.Controls.Add(uploadButton);
             exploreState = new EmptyState("", "");
             content.Controls.Add(exploreState);
@@ -102,20 +102,11 @@ namespace DeskWidgets
             settings.Click += delegate { ShowPage(SettingsPage); };
             sidebar.Controls.Add(settings);
             BuildSettingsControls();
-            // The account sits at the bottom of the sidebar (§8.11): your photo and name, or Sign In.
-            account = new SidebarItem('\uE77B', "");
-            account.SetBounds(Px(12), sidebar.Height - Px(88), sidebar.Width - Px(24), Px(34));
-            account.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
-            account.Click += delegate { AccountClicked(); };
-            sidebar.Controls.Add(account);
-            UpdateAccount();
-            if (Account.SignedIn && Account.Photo == null) System.Threading.ThreadPool.QueueUserWorkItem(delegate { Account.LoadProfile(); });
 
             Controls.Add(content);
             Controls.Add(sidebar);
             App.Current.WidgetsChanged += OnWidgetsChanged;
             WidgetRegistry.Changed += OnRegistryChanged;
-            Account.Changed += UpdateAccount;
             Theme.Changed += OnThemeChanged;
             ShowPage(null);
         }
@@ -191,7 +182,7 @@ namespace DeskWidgets
 
         void BuildNav()
         {
-            foreach (var c in sidebar.Controls.Cast<Control>().Where(c => c != settings && c != account && c != collapse).ToArray()) { sidebar.Controls.Remove(c); c.Dispose(); }
+            foreach (var c in sidebar.Controls.Cast<Control>().Where(c => c != settings && c != collapse).ToArray()) { sidebar.Controls.Remove(c); c.Dispose(); }
             nav.Clear();
             navLabels.Clear();
             navTitle = new Label { Text = "Desk Widgets", Font = Theme.Title3, ForeColor = Theme.Label, AutoSize = true, Location = new Point(Px(24), Px(22)), Visible = !collapsed };
@@ -575,17 +566,15 @@ namespace DeskWidgets
 
         // ---- Explore: search and sort ----
 
-        // Newest is the order the gallery already returns (reviewed_at desc), so it costs nothing
-        // and stays the default. The others rearrange the list the app is already holding: all of
-        // Explore arrives in one query, so there is nothing to ask the server for and no paging.
-        enum ExploreSort { Newest, Liked, Installed, Name }
+        // Newest is the order the gallery already lists them in, so it costs nothing and stays the
+        // default. Name rearranges the list the app is already holding: all of Explore arrives in
+        // one file, so there is nothing more to ask for and no paging.
+        enum ExploreSort { Newest, Name }
 
         static string SortName(ExploreSort s)
         {
             switch (s)
             {
-                case ExploreSort.Liked: return "Most Liked";
-                case ExploreSort.Installed: return "Most Installed";
                 case ExploreSort.Name: return "Name";
                 default: return "Newest";
             }
@@ -600,7 +589,7 @@ namespace DeskWidgets
             // Sized from its longest label so choosing a shorter one never shifts the row. The
             // chevron is U+25BE and not a Fluent icon glyph: this button paints with Theme.Button,
             // the text font, which has no icon glyphs and would draw a blank box instead.
-            exploreSort = new PillButton(SortName(ExploreSort.Installed) + "  ▾", ButtonStyle.Grey);
+            exploreSort = new PillButton(SortName(ExploreSort.Newest) + "  ▾", ButtonStyle.Grey);
             exploreSort.Text = SortName(exploreSortBy) + "  ▾";
             exploreSort.Click += delegate { ShowSortMenu(); };
             content.Controls.Add(exploreSort);
@@ -609,7 +598,7 @@ namespace DeskWidgets
         void ShowSortMenu()
         {
             var menu = new PopupMenu();
-            foreach (ExploreSort option in new[] { ExploreSort.Newest, ExploreSort.Liked, ExploreSort.Installed, ExploreSort.Name })
+            foreach (ExploreSort option in new[] { ExploreSort.Newest, ExploreSort.Name })
             {
                 ExploreSort chosen = option; // captured per item, not once for the whole loop
                 menu.AddChoice(SortName(chosen), exploreSortBy == chosen, delegate
@@ -623,26 +612,13 @@ namespace DeskWidgets
             menu.Show(exploreSort.PointToScreen(new Point(0, exploreSort.Height + Px(4))));
         }
 
-        // The cards to show, in order: search narrows, sort arranges. Ties fall back to the name so
-        // a gallery where nothing has been liked yet still has a stable, readable order.
+        // The cards to show, in order: search narrows, sort arranges.
         List<ExploreCard> VisibleExploreCards()
         {
             string q = exploreSearch.Box.Text.Trim();
             IEnumerable<ExploreCard> cards = exploreCards.Where(c => c.Matches(q));
-            switch (exploreSortBy)
-            {
-                case ExploreSort.Liked:
-                    cards = cards.OrderByDescending(c => c.Listing.Likes)
-                                 .ThenBy(c => c.Listing.Name, StringComparer.CurrentCultureIgnoreCase);
-                    break;
-                case ExploreSort.Installed:
-                    cards = cards.OrderByDescending(c => c.Listing.Installs)
-                                 .ThenBy(c => c.Listing.Name, StringComparer.CurrentCultureIgnoreCase);
-                    break;
-                case ExploreSort.Name:
-                    cards = cards.OrderBy(c => c.Listing.Name, StringComparer.CurrentCultureIgnoreCase);
-                    break;
-            }
+            if (exploreSortBy == ExploreSort.Name)
+                cards = cards.OrderBy(c => c.Listing.Name, StringComparer.CurrentCultureIgnoreCase);
             return cards.ToList();
         }
 
@@ -677,8 +653,7 @@ namespace DeskWidgets
                         var pictures = Community.FetchPreviews(kept, true);
                         foreach (var l in kept) if (pictures[l] != null) pictured.Add(ExploreKey(l));
                         bool fresh = Community.ExploreFresh;
-                        List<string> mine = fresh ? MyLikes() : null;
-                        App.RunOnUi(delegate { ShowExplore(kept, pictures, mine, fresh); });
+                        App.RunOnUi(delegate { ShowExplore(kept, pictures, fresh); });
                         if (fresh) return;
                     }
                 }
@@ -691,23 +666,14 @@ namespace DeskWidgets
                     Community.PrunePreviews(list);
                 }
                 catch (Exception) { list = null; }
-                List<string> liked = MyLikes();
-                App.RunOnUi(delegate { ShowExplore(list, previews, liked, true); });
+                App.RunOnUi(delegate { ShowExplore(list, previews, true); });
             });
         }
 
-        // Which widgets you have liked, so the hearts start filled. Signed out there are none; null
-        // when the call fails, which leaves the hearts as they are and never costs you the list.
-        static List<string> MyLikes()
-        {
-            try { return Account.MyLikes(); }
-            catch (Exception) { return null; }
-        }
-
         // Puts a list on the page by changing as little as possible: a card whose widget and
-        // version are still listed stays (with its new counts), new ones are added, and the ones
+        // version are still listed stays, new ones are added, and the ones
         // no longer listed go. list is null when the gallery couldn't be reached.
-        void ShowExplore(List<Community.Listing> list, Dictionary<Community.Listing, Bitmap> previews, List<string> liked, bool done)
+        void ShowExplore(List<Community.Listing> list, Dictionary<Community.Listing, Bitmap> previews, bool done)
         {
             if (done) exploreLoading = false;
             if (IsDisposed || list == null)
@@ -740,7 +706,6 @@ namespace DeskWidgets
                     card = new ExploreCard(l, picture);
                     content.Controls.Add(card);
                 }
-                if (liked != null) card.Liked = liked.Contains(l.Id);
                 card.Invalidate();
                 exploreCards.Add(card);
             }
@@ -749,29 +714,6 @@ namespace DeskWidgets
             if (list.Count == 0) exploreState.Set("Nothing Here Yet", "Reviewed community widgets will appear here.");
             else exploreState.Set("No Matches", "No widget here matches what you typed.");
             LayoutContent();
-        }
-
-        // ---- account ----
-
-        void UpdateAccount()
-        {
-            if (IsDisposed) return;
-            account.Text = Account.SignedIn ? Account.Username : "Sign In";
-            account.Photo = Account.SignedIn ? Account.Photo : null;
-            account.Invalidate();
-        }
-
-        void AccountClicked()
-        {
-            if (!Account.SignedIn) { App.SignIn(null); return; }
-            var menu = new PopupMenu();
-            menu.Add("Upload a Widget…", delegate { App.UploadWidget(null); });
-            menu.Add("Your Uploads ↗", delegate { App.OpenWebsite("upload.html#uploads"); });
-            menu.Add("Edit Profile ↗", delegate { App.OpenWebsite("account.html"); });
-            if (Account.IsAdmin) menu.Add("Admin Console ↗", delegate { App.OpenWebsite("admin.html"); });
-            menu.AddSeparator();
-            menu.Add("Sign Out", Account.SignOut);
-            menu.Show(account.PointToScreen(new Point(0, account.Height)));
         }
 
         // ---- changes ----
@@ -820,7 +762,6 @@ namespace DeskWidgets
             ShowPage(page, false); // a repaint for the new theme, not a move to another page
             foreach (Control c in content.Controls) c.Invalidate();
             settings.Invalidate();
-            account.Invalidate();
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -833,7 +774,6 @@ namespace DeskWidgets
         {
             App.Current.WidgetsChanged -= OnWidgetsChanged;
             WidgetRegistry.Changed -= OnRegistryChanged;
-            Account.Changed -= UpdateAccount;
             Theme.Changed -= OnThemeChanged;
             base.OnFormClosed(e);
         }
@@ -1000,7 +940,6 @@ namespace DeskWidgets
         public char Glyph;
         public string Subtitle;
         public bool Toggle;
-        public Bitmap Photo;
 
         bool selectedValue;
         float selectionBlend;
@@ -1064,20 +1003,7 @@ namespace DeskWidgets
             }
 
             var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding;
-            if (Photo != null)
-            {
-                int d = Px(22);
-                using (var clip = new GraphicsPath())
-                {
-                    clip.AddEllipse(Px(11), (Height - d) / 2, d, d);
-                    g.SetClip(clip);
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.DrawImage(Photo, Px(11), (Height - d) / 2, d, d);
-                    g.ResetClip();
-                }
-            }
-            else
-                TextRenderer.DrawText(g, Glyph.ToString(), Theme.Icons, new Rectangle(Px(12), 0, Px(20), Height), Theme.Link, flags);
+            TextRenderer.DrawText(g, Glyph.ToString(), Theme.Icons, new Rectangle(Px(12), 0, Px(20), Height), Theme.Link, flags);
             bool hasSub = !string.IsNullOrEmpty(Subtitle);
             int textW = Width - Px(46) - (Toggle ? Px(44) : 0);
             if (textW < Px(24)) { } // the sidebar's rail: the icon alone
@@ -1225,7 +1151,7 @@ namespace DeskWidgets
         Bitmap preview; // may be null
         Bitmap fitted;  // preview at the size the card draws it
         readonly PillButton button;
-        bool pressed, dragging, dragged; // dragged: this press turned into a drag, so it is not a tap
+        bool pressed, dragging;
         Point downAt;
         DragGhost ghost;
 
@@ -1243,10 +1169,9 @@ namespace DeskWidgets
         PluginInfo Installed { get { return Plugins.Get(listing.Id); } }
 
         public Community.Listing Listing { get { return listing; } }
-        public bool Liked;
         public bool HasPreview { get { return preview != null; } }
 
-        // The same widget and version, listed again: new counts and wording, same card. The
+        // The same widget and version, listed again: new wording, same card. The
         // picture is taken only if this card had none; the card owns whichever it keeps.
         public void Relist(Community.Listing fresh, Bitmap picture)
         {
@@ -1274,122 +1199,6 @@ namespace DeskWidgets
             return haystack != null && haystack.IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0;
         }
 
-        // The chip has a band of its own along the top of the card: the heart you tap and the count
-        // it stands for. The preview starts below it rather than under it, so artwork that fills its
-        // box is never covered.
-        static int ChipBand { get { return Px(24) + Px(6); } }
-
-        // Three digits and at most one letter, so the label never outgrows the chip: 999, then 1k,
-        // 12k, 999k, 1M. Truncating rather than rounding keeps it honest -- 1999 reads 1k, never 2k.
-        static string Compact(int n)
-        {
-            if (n < 1000) return n.ToString(System.Globalization.CultureInfo.CurrentCulture);
-            if (n < 1000000) return (n / 1000).ToString(System.Globalization.CultureInfo.CurrentCulture) + "k";
-            if (n < 1000000000) return (n / 1000000).ToString(System.Globalization.CultureInfo.CurrentCulture) + "M";
-            return (n / 1000000000).ToString(System.Globalization.CultureInfo.CurrentCulture) + "B";
-        }
-
-        string LikeText { get { return Compact(listing.Likes); } }
-
-        const int ChipGap = 5, ChipSide = 9, ChipIcon = 16;
-
-        // Measured the way it is drawn: NoPadding, or the reported width carries padding the paint
-        // never uses and the chip ends up with dead space at its right. The proposed size is large
-        // but finite -- int.MaxValue makes GDI return an inflated width.
-        static int TextWidth(string text, Font font)
-        {
-            return TextRenderer.MeasureText(text, font, new Size(1000, 100), TextFormatFlags.NoPadding).Width;
-        }
-
-        // At rest the chip is just a heart. The count slides out to its left while the pointer is
-        // over the card, and after a tap: 0 is heart only, 1 is the count fully out. Hover is what
-        // makes Most Liked legible -- an order you cannot see the basis of is not much of an order.
-        float reveal;
-        Anim revealAnim, holdAnim;
-        bool hovering;
-
-        // The heart's own box, and the only thing that takes the click. Fixed whatever the count is
-        // doing, so what you are pointing at never slides out from under the cursor mid-animation.
-        Rectangle HeartRect
-        {
-            get
-            {
-                // A fixed box for the heart rather than its advance width: a glyph carries its own
-                // side bearings, and the heart's trailing one is half its ink again, which reads as
-                // a hole beside it. Centred in the box, it lands where it should whatever the icon
-                // font does.
-                int w = Px(ChipSide) + Px(ChipIcon) + Px(ChipSide);
-                return new Rectangle(Width - Px(12) - w, Px(12), w, Px(24));
-            }
-        }
-
-        // The capsule behind it, which grows leftwards as the count comes out.
-        Rectangle ChipRect(float r)
-        {
-            Rectangle h = HeartRect;
-            int grow = (int)Math.Round(r * (Px(ChipGap) + TextWidth(LikeText, Theme.Footnote)));
-            return new Rectangle(h.X - grow, h.Y, h.Width + grow, h.Height);
-        }
-
-        // Moves the count towards open or shut from wherever it currently is, so a pointer that
-        // crosses the card quickly never jumps -- it turns round from where it had got to.
-        void SetReveal(float target, int ms)
-        {
-            if (revealAnim != null) { revealAnim.Cancel(); revealAnim = null; }
-            float from = reveal;
-            if (Math.Abs(from - target) < 0.001f) return;
-            revealAnim = Anim.Run(0f, 1f, ms, delegate(float t)
-            {
-                reveal = from + (target - from) * t;
-                if (!IsDisposed) Invalidate();
-            }, delegate
-            {
-                revealAnim = null;
-                reveal = target;
-                if (!IsDisposed) Invalidate();
-            });
-        }
-
-        // A tap holds the count open for a moment even once the pointer has gone, so the number you
-        // just changed is readable whether or not you stayed on the card. The hold is an animation
-        // with nothing to animate: it is the one timer this code already has, so it owns no other.
-        void FlashCount()
-        {
-            SetReveal(1f, 140);
-            if (holdAnim != null) holdAnim.Cancel();
-            holdAnim = Anim.Run(0f, 1f, 1600, delegate { }, delegate
-            {
-                holdAnim = null;
-                if (!IsDisposed && !hovering) SetReveal(0f, 160);
-            });
-        }
-
-        string Glyph { get { return Liked ? "" : ""; } }
-
-        // Liking is one row in the gallery, so the screen can move first and be put back if the
-        // write fails: the count shown must never claim more than the database holds.
-        void ToggleLike()
-        {
-            if (!Account.SignedIn) { App.SignIn(null); return; }
-            bool want = !Liked;
-            Liked = want;
-            listing.Likes = Math.Max(0, listing.Likes + (want ? 1 : -1));
-            FlashCount();
-            System.Threading.ThreadPool.QueueUserWorkItem(delegate
-            {
-                bool failed = false;
-                try { if (want) Account.Like(listing.Id); else Account.Unlike(listing.Id); }
-                catch (Exception) { failed = true; }
-                App.RunOnUi(delegate
-                {
-                    if (IsDisposed || !failed) return;
-                    Liked = !want;
-                    listing.Likes = Math.Max(0, listing.Likes + (want ? -1 : 1));
-                    Invalidate();
-                });
-            });
-        }
-
         public void RefreshState()
         {
             PluginInfo p = Installed;
@@ -1406,14 +1215,6 @@ namespace DeskWidgets
             PluginInfo p = Installed;
             if (p != null && p.Version >= listing.Version) App.ConfirmUninstall(p);
             else Community.Install(listing.Id, listing.Version);
-        }
-
-        // Untrusted image data: size-capped, decoded into a copy, and dropped if it's odd in any way.
-        public static Bitmap DecodePreview(string base64)
-        {
-            if (string.IsNullOrEmpty(base64) || base64.Length > 140000) return null;
-            try { return Community.DecodePreview(Convert.FromBase64String(base64)); }
-            catch (FormatException) { return null; }
         }
 
         public override Color BackColor { get { return HoverBlend > 0f ? Theme.Blend(Theme.Card, Theme.CardHover, HoverBlend) : Theme.Card; } set { } }
@@ -1437,9 +1238,7 @@ namespace DeskWidgets
         {
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             int pad = Px(12), box = Px(176) - pad * 2;
-            // Same bottom edge as before, so the name and the rows under it do not move: the chip
-            // band comes out of the top of the preview, not out of the text below it.
-            int imgTop = pad + ChipBand, imgH = box - ChipBand;
+            int imgTop = pad, imgH = box;
             Theme.FillRound(g, BackColor, new RectangleF(0, 0, Width - 1, Height - 1), Px(Theme.RadiusCard));
             var flags = TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding;
             if (preview != null)
@@ -1452,27 +1251,6 @@ namespace DeskWidgets
             else
                 TextRenderer.DrawText(g, "No Preview", Theme.Footnote, new Rectangle(pad, imgTop, box, imgH), Theme.Label2, BackColor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-
-            // The install count is deliberately not drawn: anyone with the public key can raise it,
-            // so it orders the Most Installed sort without being published as a figure on a card.
-            // One translucent fill, the same grey a quiet capsule button uses. Both labels are drawn
-            // with the overload that takes no back colour: the one that takes it has GDI paint a
-            // solid rectangle first, which showed as a dark box around the glyph and the number.
-            Rectangle heart = HeartRect, chip = ChipRect(reveal);
-            Theme.FillRound(g, Theme.Fill, new RectangleF(chip.X, chip.Y, chip.Width, chip.Height), chip.Height / 2f);
-            var mid = TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter;
-            // The count rides the capsule's left edge, and its box stops short of the heart. GDI
-            // clips text to the box it is given, so the number is uncovered as the capsule opens
-            // instead of appearing all at once, and it can never spill over the heart.
-            int glyphX = heart.X + Px(ChipSide);
-            int numberX = chip.X + Px(ChipSide);
-            int numberW = Math.Max(0, glyphX - Px(ChipGap) - numberX);
-            if (numberW > 0)
-                TextRenderer.DrawText(g, LikeText, Theme.Footnote,
-                    new Rectangle(numberX, chip.Y, numberW, chip.Height), Theme.Label2, mid);
-            TextRenderer.DrawText(g, Glyph, Theme.Icons,
-                new Rectangle(glyphX, chip.Y, Px(ChipIcon), chip.Height),
-                Liked ? Theme.Destructive : Theme.Label2, mid | TextFormatFlags.HorizontalCenter);
 
             int textTop = pad + box + Px(8), lineW = Width - pad * 2;
             TextRenderer.DrawText(g, listing.Name, Theme.BodyEmphasized, new Rectangle(pad, textTop, lineW, Px(20)), Theme.Label, BackColor, flags);
@@ -1494,10 +1272,8 @@ namespace DeskWidgets
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            // The heart is a button: pressing it never starts a drag.
-            if (e.Button != MouseButtons.Left || HeartRect.Contains(e.Location)) return;
+            if (e.Button != MouseButtons.Left) return;
             pressed = true;
-            dragged = false;
             downAt = e.Location;
         }
 
@@ -1513,7 +1289,7 @@ namespace DeskWidgets
             {
                 Size slop = SystemInformation.DragSize;
                 if (Math.Abs(e.X - downAt.X) < slop.Width && Math.Abs(e.Y - downAt.Y) < slop.Height) return;
-                dragging = dragged = true;
+                dragging = true;
                 // The gallery's picture stands in for the widget, which isn't on this PC yet.
                 if (preview != null)
                 {
@@ -1521,10 +1297,7 @@ namespace DeskWidgets
                     ghost.CenterOn(Cursor.Position);
                     ghost.Show();
                 }
-                return;
             }
-            Cursor want = HeartRect.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
-            if (Cursor != want) Cursor = want;
         }
 
         // WinForms may release capture before or after MouseUp, so both paths finish the drag.
@@ -1558,8 +1331,6 @@ namespace DeskWidgets
 
         protected override void OnMouseEnter(EventArgs e)
         {
-            hovering = true;
-            SetReveal(1f, 140);
             AnimateHover(true);
             base.OnMouseEnter(e);
         }
@@ -1567,8 +1338,6 @@ namespace DeskWidgets
         protected override void OnMouseLeave(EventArgs e)
         {
             if (ClientRectangle.Contains(PointToClient(Cursor.Position))) return; // moved onto the button
-            hovering = false;
-            if (holdAnim == null) SetReveal(0f, 160); // a tap just now keeps it open a moment longer
             AnimateHover(false);
             base.OnMouseLeave(e);
         }
@@ -1579,7 +1348,6 @@ namespace DeskWidgets
             if (e.Button == MouseButtons.Left)
             {
                 Drop();
-                if (!dragged && HeartRect.Contains(e.Location)) ToggleLike();
                 return;
             }
             if (e.Button != MouseButtons.Right) return;
@@ -1608,9 +1376,6 @@ namespace DeskWidgets
                 EndDrag();
                 if (preview != null) preview.Dispose();
                 if (fitted != null) { fitted.Dispose(); fitted = null; }
-                // Stop the count animation: its tick holds this card.
-                if (revealAnim != null) { revealAnim.Cancel(); revealAnim = null; }
-                if (holdAnim != null) { holdAnim.Cancel(); holdAnim = null; }
             }
             base.Dispose(disposing);
         }
@@ -1713,13 +1478,13 @@ namespace DeskWidgets
                         dlg.Filter = "PNG image (*.png)|*.png";
                         dlg.FileName = (plugin.Name ?? plugin.Id) + ".png";
                         if (dlg.ShowDialog() != DialogResult.OK) return;
-                        byte[] png = UploadDialog.PreviewOf(type);
+                        byte[] png = Community.PreviewPng(type);
                         if (png == null) return;
                         try { System.IO.File.WriteAllBytes(dlg.FileName, png); }
                         catch (Exception ex) { AlertDialog.Show("The preview couldn't be saved.", ex.Message); }
                     }
                 });
-                if (plugin.Author == "local") menu.Add("Upload to the Gallery…", delegate { App.UploadWidget(plugin); });
+                if (plugin.Author == "local") menu.Add("Publish to the Gallery ↗", App.PublishWidget);
                 menu.AddSeparator();
                 menu.AddDestructive("Uninstall…", delegate { App.ConfirmUninstall(plugin); });
             }
