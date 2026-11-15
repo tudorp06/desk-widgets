@@ -724,6 +724,14 @@ Windows draws only the title bar and the scrollbars, in its light or dark style 
 - Sizes: sidebar 260 wide with 34 px rows; content padding 32; grid gap 20; cards 176 × 240
   (double width for medium widgets).
 
+- **The sidebar collapses** to a 58 px rail of icons from the ☰ button at its top right (top of
+  the rail once narrow). The title and group labels are hidden in the rail and the rows keep
+  their icon, selection fill and place, so nothing moves vertically. The width eases over 180 ms
+  and the choice is remembered.
+- **Scrolling** eases on a critically damped spring, one step per screen refresh, and paints
+  what it uncovers in the same step. Anything a card draws while scrolling must already be at
+  its drawn size: scale a picture once and keep it, never per paint.
+
 ### 17.4 Right-click menus
 Drawn by the app (`PopupMenu`), never the Windows menu. A 10 px-radius panel, near-opaque
 (`#f6f6f8` / `#2a2a2d` at 98 %) with a hairline edge and a soft shadow, 5 px padding, 24 px rows,
@@ -775,6 +783,14 @@ text. One Primary per group.
   **Install counts are never drawn on a card.** They order the Most Installed sort and nothing
   else: anyone with the public key can raise one, so showing it would publish a number the app
   cannot stand behind.
+- **Dragging from Explore**: an Explore card drags onto the desktop like a library card, with the
+  gallery's preview as the ghost. A widget you already have is placed where you let go. One you
+  don't have shows the install sheet first, and lands at that spot once you agree; Cancel places
+  nothing. The heart and the button never start a drag.
+- **Explore keeps its cards**: the list is shown from the kept copy at once and refreshed from
+  the gallery when it is more than ten minutes old. A refresh changes cards in place — it never
+  clears the grid, shows "Loading…" over cards, or moves the scroll position. Installing or
+  removing a widget only changes that card's button.
 - **Installed**: "Install from File…" at the top right; first a grouped list of updates
   ("Moon Phase 2 is available", **Update**), then the cards, then a grouped list of turned-off
   widgets (**Try Again**). Show Source and Uninstall… (red, last) are on right-click.
@@ -789,6 +805,9 @@ above the account row) or from "Settings…" in the tray menu:
   — System, Light, Dark — with a checkmark glyph on the active choice and a selection
   highlight. Picking one persists the choice in the `[app]` config section and immediately
   switches the library and all dialogs.
+- **Backup**: a group label ("Backup" in 12/600 secondary), then two Grey pill buttons side by
+  side, "Export Backup…" and "Restore from Backup…". They do the same as the two tray menu
+  items of the same names.
 - **Uninstall Desk Widgets**: a Destructive pill button at the bottom. Confirms with an alert
   (Cancel default, Uninstall red), then removes the autostart entry, Start menu shortcut,
   URL protocol, settings and caches, and exits.

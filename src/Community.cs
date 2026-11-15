@@ -40,10 +40,15 @@ namespace DeskWidgets
             return h;
         }
 
-        static object[] Query(string pathAndQuery)
+        static object[] Query(string pathAndQuery) { return Parse(QueryText(pathAndQuery)); }
+
+        static string QueryText(string pathAndQuery)
         {
-            var headers = AnonHeaders();
-            string json = Encoding.UTF8.GetString(Http.GetBytes(Url.TrimEnd('/') + "/rest/v1/" + pathAndQuery, headers));
+            return Encoding.UTF8.GetString(Http.GetBytes(Url.TrimEnd('/') + "/rest/v1/" + pathAndQuery, AnonHeaders()));
+        }
+
+        static object[] Parse(string json)
+        {
             var parsed = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 }.DeserializeObject(json) as object[];
             if (parsed == null) throw new FormatException("Unexpected answer from the gallery.");
             return parsed;
@@ -62,11 +67,59 @@ namespace DeskWidgets
             return int.TryParse(Text(row, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out n) ? n : 0;
         }
 
-        // The newest approved version of every widget. Call from a background thread.
+        // ---- the Explore list, kept ----
+        // The list is kept in memory for as long as the app runs and on disk between runs, so
+        // Explore opens with its cards already there (and still opens offline). The gallery is
+        // asked again only when the copy is older than ExploreKeep.
+
+        static readonly object exploreLock = new object();
+        static List<Listing> exploreKept;            // the last answer, or what the disk held
+        static DateTime exploreAsked;                // UTC of the last answer from the gallery this run
+        static readonly TimeSpan ExploreKeep = TimeSpan.FromMinutes(10);
+        static readonly string ExploreFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskWidgets", "explore.json");
+
+        // True while the kept list is recent enough that asking the gallery again would be a waste.
+        public static bool ExploreFresh
+        {
+            get { lock (exploreLock) return exploreKept != null && DateTime.UtcNow - exploreAsked < ExploreKeep; }
+        }
+
+        // The kept list without asking the gallery, or null when there is none. Call from a
+        // background thread: the first call of a run reads the disk.
+        public static List<Listing> KeptExplore()
+        {
+            lock (exploreLock) if (exploreKept != null) return new List<Listing>(exploreKept);
+            List<Listing> fromDisk;
+            try { fromDisk = Listings(Parse(File.ReadAllText(ExploreFile, Encoding.UTF8))); }
+            catch (Exception) { return null; } // no file yet, or one that doesn't parse
+            lock (exploreLock)
+            {
+                if (exploreKept == null) exploreKept = fromDisk;
+                return new List<Listing>(exploreKept);
+            }
+        }
+
+        // The newest approved version of every widget, from the gallery. Call from a background thread.
         public static List<Listing> Explore()
         {
             // Previews are fetched separately, once per version (Preview), so the list stays small.
-            return Query("explore?select=id,version,name,category,description,api_version,author,installs,likes&order=reviewed_at.desc")
+            string json = QueryText("explore?select=id,version,name,category,description,api_version,author,installs,likes&order=reviewed_at.desc");
+            List<Listing> list = Listings(Parse(json));
+            lock (exploreLock) { exploreKept = new List<Listing>(list); exploreAsked = DateTime.UtcNow; }
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(ExploreFile));
+                File.WriteAllText(ExploreFile, json, new UTF8Encoding(false));
+            }
+            catch (Exception) { } // the copy on disk is a convenience
+            return list;
+        }
+
+        // Rows from the gallery or from the disk: checked the same way either way.
+        static List<Listing> Listings(object[] rows)
+        {
+            return rows
                 .Select(r => new Listing
                 {
                     Id = Text(r, "id"), Version = Number(r, "version"), Name = Text(r, "name") ?? "", Category = Text(r, "category"),
@@ -126,8 +179,9 @@ namespace DeskWidgets
         }
 
         // All previews for a list of widgets: from disk cache when available, otherwise one batch
-        // query for all uncached previews instead of one HTTP request per widget.
-        public static Dictionary<Listing, Bitmap> FetchPreviews(List<Listing> listings)
+        // query for all uncached previews instead of one HTTP request per widget. diskOnly never
+        // asks the gallery: a widget whose preview isn't on disk yet simply has none for now.
+        public static Dictionary<Listing, Bitmap> FetchPreviews(List<Listing> listings, bool diskOnly)
         {
             var result = new Dictionary<Listing, Bitmap>();
             var uncached = new List<Listing>();
@@ -148,7 +202,8 @@ namespace DeskWidgets
                 catch (Exception) { }
                 uncached.Add(l);
             }
-            if (uncached.Count > 0)
+            if (diskOnly) foreach (var l in uncached) result[l] = null;
+            else if (uncached.Count > 0)
             {
                 try
                 {
@@ -235,8 +290,12 @@ namespace DeskWidgets
             if (TryParseUrl(url, out id, out version)) Install(id, version);
         }
 
+        public static void Install(string id, int version) { Install(id, version, null); }
+
         // Fetches one approved version, checks it, asks, installs. Starts on the UI thread.
-        public static void Install(string id, int version)
+        // dropAt is where a card dragged out of Explore was let go: once the person has said yes
+        // and the widget is installed, one is placed there. Saying no places nothing.
+        public static void Install(string id, int version, Point? dropAt)
         {
             if (!Plugins.IsValidId(id)) return;
             if (!Configured)
@@ -265,12 +324,12 @@ namespace DeskWidgets
                 {
                     if (error != null) { AlertDialog.Show("Couldn't get the widget.", error); return; }
                     if (row == null) { AlertDialog.Show("This widget isn't available.", "It may have been removed, or this version wasn't approved."); return; }
-                    Confirm(id, row, author);
+                    Confirm(id, row, author, dropAt);
                 });
             });
         }
 
-        static void Confirm(string id, object row, string author)
+        static void Confirm(string id, object row, string author, Point? dropAt)
         {
             string source = Text(row, "source") ?? "";
             byte[] bytes = new UTF8Encoding(false).GetBytes(source);
@@ -309,7 +368,9 @@ namespace DeskWidgets
                 Id = id, Version = version, Api = api, Name = name, Category = Text(row, "category"),
                 Description = Text(row, "description"), Author = author, Sha256 = Text(row, "sha256")
             };
-            if (Plugins.InstallChecked(p, bytes, name)) RecordInstall(id);
+            if (!Plugins.InstallChecked(p, bytes, name)) return;
+            RecordInstall(id);
+            if (dropAt != null && p.Type != null) App.Current.AddWidget(p.Type, dropAt);
         }
 
         // Counted once the widget is really on the PC, not when its code was fetched: the source is
