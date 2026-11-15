@@ -1,0 +1,7 @@
+{
+  "name": "Gmail",
+  "category": "productivity",
+  "description": "Your newest unread mail",
+  "api_version": 1,
+  "version": 1
+}

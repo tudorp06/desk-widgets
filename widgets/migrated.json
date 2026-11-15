@@ -1,0 +1,182 @@
+{
+  "u.codewithaiyan.gmail": {
+    "version": 1,
+    "sha256": "279046c043de7cb642c8fdee6e5d3f72c695e5b1161da4b29b92c0fdaba6ddb0",
+    "reviewed_at": "2026-11-02T21:30:11.788951+00:00"
+  },
+  "u.saif.calendar": {
+    "version": 1,
+    "sha256": "0567ec2ccd4cbcbfdabe58799a618da84886dba11ae8d1070332b3bfdd0571ae",
+    "reviewed_at": "2026-10-31T11:05:47.305744+00:00"
+  },
+  "u.saif.clipboardwidget": {
+    "version": 1,
+    "sha256": "4a4bd87833ecb5c685845f4d81978599c73dee0dac98e581e033f2dc443c4d6a",
+    "reviewed_at": "2026-11-05T08:39:15.753391+00:00"
+  },
+  "u.saif.cryptowidget": {
+    "version": 3,
+    "sha256": "4bfdbef6a5bdde412d59842fee9db874e279f36df1d74dd7491713376985caa0",
+    "reviewed_at": "2026-11-08T08:59:18.193017+00:00"
+  },
+  "u.saif.f1-hub": {
+    "version": 1,
+    "sha256": "1e0ac70c5d588d1aae5b865ecd36fae2b71d263f4b8a2bdae6aee10af28eaf1f",
+    "reviewed_at": "2026-10-31T11:06:07.529924+00:00"
+  },
+  "u.saif.f1-timing": {
+    "version": 1,
+    "sha256": "62e2fc25e8f56008f44baced2b83988c139f76ac014428531b931d0c0f016a98",
+    "reviewed_at": "2026-10-31T11:06:09.50446+00:00"
+  },
+  "u.saif.focust-imer": {
+    "version": 1,
+    "sha256": "92e28e6666b322383ca8bcaba79639e5f8b2dd8a9de5164e7be9a9a41f6b5c49",
+    "reviewed_at": "2026-10-31T11:05:52.820413+00:00"
+  },
+  "u.saif.github": {
+    "version": 1,
+    "sha256": "130b1d6dd3e87c5c45151c907ec5f9bd5ad2992da3e33c58da22a5a6f865d5c6",
+    "reviewed_at": "2026-10-31T11:06:05.389134+00:00"
+  },
+  "u.saif.minesweeper": {
+    "version": 2,
+    "sha256": "5dfff31c78e00a24ceceff78fc9fd66bc4ea9c787250b95b720290313666897d",
+    "reviewed_at": "2026-11-02T21:42:21.408664+00:00"
+  },
+  "u.saif.notes": {
+    "version": 3,
+    "sha256": "1eaa797919a5ae6f1ab294ce59e341f4330e62c466fd1fe8b84771045b56bf5e",
+    "reviewed_at": "2026-11-12T17:15:20.371065+00:00"
+  },
+  "u.saif.nothingclock": {
+    "version": 1,
+    "sha256": "3c59ebcb151deb3bff696e55e39b9404a5e0ade8424a5bbdd04da2a5058c4173",
+    "reviewed_at": "2026-11-13T21:25:34.485278+00:00"
+  },
+  "u.saif.nothingdatepeel": {
+    "version": 1,
+    "sha256": "81a5c73c8ab54f62e53e4f725cc35261fbe2b49fe63c4d22b8c6a34eac2b80ce",
+    "reviewed_at": "2026-11-13T21:26:04.032947+00:00"
+  },
+  "u.saif.nothingdigitalclock": {
+    "version": 1,
+    "sha256": "64e5e22ad89c723ad0e5e2e487ba37d2a51fe2fdb3198763e3fea085da3d1f23",
+    "reviewed_at": "2026-11-13T21:25:36.773002+00:00"
+  },
+  "u.saif.nothingmicmute": {
+    "version": 1,
+    "sha256": "d66372306b48e5b165e546a7a6704f0b67f14a9646d39a81bf021dd0e35a6f43",
+    "reviewed_at": "2026-11-13T21:26:07.551227+00:00"
+  },
+  "u.saif.nothingmusic": {
+    "version": 1,
+    "sha256": "b2bd53b8b1168617e9a6ec4567eb3b2b02b75e3c6ccd433770b3e959e85dad46",
+    "reviewed_at": "2026-11-13T21:25:39.009527+00:00"
+  },
+  "u.saif.nothingnetspeed": {
+    "version": 1,
+    "sha256": "7e69118cdc9b2c2e38d2af7e8abd5bd7bc3edeb49dfedc0bf80329fc6e362cda",
+    "reviewed_at": "2026-11-13T21:26:09.763265+00:00"
+  },
+  "u.saif.nothingphotoframe": {
+    "version": 1,
+    "sha256": "10d6f16fec3b7b0dbf4d4da4fdd94e36c0786870a944b3ca27bc273809ec1173",
+    "reviewed_at": "2026-11-13T21:25:44.044411+00:00"
+  },
+  "u.saif.nothingscreentime": {
+    "version": 1,
+    "sha256": "777a873c5890c1a77716f99a4243c766d355e0d07dd1248427e9d6154ba00789",
+    "reviewed_at": "2026-11-13T21:26:14.149953+00:00"
+  },
+  "u.saif.nothingstorage": {
+    "version": 1,
+    "sha256": "bf60fb2efec6bf1de1fac64532548dd3deaa3a58f87fbc687aff859789709033",
+    "reviewed_at": "2026-11-13T21:26:16.351059+00:00"
+  },
+  "u.saif.nothingtoggles": {
+    "version": 1,
+    "sha256": "48e2f399453bf26c85ac18483e95e1cd6151430d44a0c196dc6e8035358a83db",
+    "reviewed_at": "2026-11-13T21:26:12.09133+00:00"
+  },
+  "u.saif.nothingvolume": {
+    "version": 1,
+    "sha256": "09a66d92af87582873c115e5ff68408d321c85512028779c3db7ec6c60b4963d",
+    "reviewed_at": "2026-11-14T09:29:51.993033+00:00"
+  },
+  "u.saif.nothingweather": {
+    "version": 1,
+    "sha256": "6b5a155e888a7e833a0c522e1832455f7dbfd26781e7b526565882c23a9f4c80",
+    "reviewed_at": "2026-11-13T21:26:18.357997+00:00"
+  },
+  "u.saif.nothingweatherpills": {
+    "version": 1,
+    "sha256": "e50242e308c5d5efe10bf35886dd2d1a683ed489898ed6c869acd3e9bd63186f",
+    "reviewed_at": "2026-11-13T21:26:20.279065+00:00"
+  },
+  "u.saif.now-playing": {
+    "version": 2,
+    "sha256": "8a52ecf8747386ee56c364e17a023ce684979c394306ccdb9d5a42b0a2cce5be",
+    "reviewed_at": "2026-11-08T13:34:00.453257+00:00"
+  },
+  "u.saif.passwordgenerator": {
+    "version": 2,
+    "sha256": "fd3d925932bb23373309bccb21032ed00583f3e8632bf0f3c69e702104514b2b",
+    "reviewed_at": "2026-11-08T06:34:47.700603+00:00"
+  },
+  "u.saif.photo-frame": {
+    "version": 1,
+    "sha256": "8c64afbd41434b94c981e034e343bcccdc1e4bf72d1d633ef62aa10bf2f35835",
+    "reviewed_at": "2026-10-31T11:06:00.492984+00:00"
+  },
+  "u.saif.quotewidget": {
+    "version": 1,
+    "sha256": "fe6b4b304771eb42a091c2814c0ccd9fff67aa193df5f6648fddc191817181cb",
+    "reviewed_at": "2026-11-05T09:45:10.806794+00:00"
+  },
+  "u.saif.reminders": {
+    "version": 3,
+    "sha256": "0c65c93a5c70fad0a676b18631060f9b028daddf74e8e218124e63c24d1e0f23",
+    "reviewed_at": "2026-11-08T13:34:08.287908+00:00"
+  },
+  "u.saif.system": {
+    "version": 1,
+    "sha256": "3c04071d72a5fb624397393e4fcdd305cc92478e1ae5de17e72773290a4b905d",
+    "reviewed_at": "2026-10-31T11:05:58.090529+00:00"
+  },
+  "u.saif.systemmonitor": {
+    "version": 1,
+    "sha256": "57ffc9419889f372ca9112f2c2218cd760e3dd6c1b6d421600deb42d6680de67",
+    "reviewed_at": "2026-11-05T08:39:26.879838+00:00"
+  },
+  "u.saif.watchlist": {
+    "version": 1,
+    "sha256": "861b9984584600e4d3d91f46be6ffcb3c39c16c06f326d6690d1cba2436a9c35",
+    "reviewed_at": "2026-11-02T19:05:24.831772+00:00"
+  },
+  "u.saif.weather": {
+    "version": 1,
+    "sha256": "4645a1f704f7fd324e65825cb0e1d8cb1eb67aaa0a4e8ab5be05ccf7cfd0c994",
+    "reviewed_at": "2026-10-31T11:05:50.290128+00:00"
+  },
+  "u.taqih.duckhuntwidget": {
+    "version": 1,
+    "sha256": "75ca6cdbae00cbc70f93d7cd19cc48d2ee31892190b5ef5eacf35218faed3756",
+    "reviewed_at": "2026-11-03T10:50:30.34444+00:00"
+  },
+  "u.taqih.redline": {
+    "version": 4,
+    "sha256": "fbda1845919feea9c846d413b27fe6f028333b6ec2e7c1eac60e80eedfd69ae7",
+    "reviewed_at": "2026-11-10T08:06:55.152693+00:00"
+  },
+  "u.taqih.snake": {
+    "version": 1,
+    "sha256": "70ed0d35812b7ebbbfc4455537aa591c85affb25042168223cc7b485a4aa0de6",
+    "reviewed_at": "2026-11-02T22:13:25.932576+00:00"
+  },
+  "u.tudorbuildsai.lcdclock": {
+    "version": 1,
+    "sha256": "88e871e7bcac48b2169d43378c567287547b8242b24688b50e874f79738c58f7",
+    "reviewed_at": "2026-11-09T03:20:46.036167+00:00"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Duck Hunt",
+  "category": "games",
+  "description": "The NES classic on your desktop. Aim with the mouse, left click to shoot.",
+  "api_version": 2,
+  "version": 1
+}

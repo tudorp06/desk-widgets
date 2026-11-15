@@ -156,13 +156,20 @@ Static site served by GitHub Pages from `main`. `docs/assets/site.js` has the sh
 individual pages (explore, upload, profile, admin, login, etc.) are self-contained HTML.
 `docs/config.js` has the publishable Supabase key.
 
-Widget previews are files on the site, not database reads: `tools/build-widget-pages.mjs` exports
-each approved version's preview to `docs/w/<id>/preview.png` and lists them in
-`docs/w/previews.json`; `getPreviews` in `docs/assets/data.js` uses the file and asks the
-database only for a version not exported yet. Never fetch `preview` (or a full `avatar`) from
-Supabase in a list or on every page view: that exhausted the free plan's 5 GB egress once.
-`.github/workflows/pages.yml` runs the script hourly and publishes the site, since `main` only
-takes pull requests and nothing can commit a new preview there.
+The gallery is moving out of Supabase and into the repository. Every community widget lives in
+`widgets/<author>/<slug>/` (`widget.cs`, `preview.png`, `meta.json`; one `author.json` per
+author) and its id is `u.<author>.<slug>`. `tools/build-widget-pages.mjs` builds `docs/w/` from
+that folder: `gallery.json` (every widget with the SHA-256 of its source, and every author),
+`previews.json`, and per widget its page, `preview.png` and `source.cs`. `docs/w/` is generated
+and not committed: `.github/workflows/pages.yml` builds it on every publish, and before serving
+`docs/` locally you run the script once. `widgets/**/*.cs` is never line-ending converted
+(`.gitattributes`), because the hash is taken from the file's bytes.
+
+Until the website and the app read `gallery.json`, they still read Supabase, with previews
+coming from `docs/w/` (`getPreviews` in `docs/assets/data.js`). Never fetch `preview` (or a full
+`avatar`) from Supabase in a list or on every page view: that exhausted the free plan's 5 GB
+egress once. A widget approved in Supabase in the meantime is brought over with
+`node tools/export-gallery.mjs`.
 
 ## Performance expectations
 
@@ -180,8 +187,7 @@ WidgetWindow.
 
 The only built-in widget is the analog clock (`src/Widgets/AnalogClock.cs`). All other widgets
 (reminders, weather, GitHub, etc.) are community widgets — users install them from the gallery
-on the community page. Community widget source lives in `community/` for reference but ships
-via Supabase, not in the exe.
+on the community page. Their source lives in `widgets/` and is not compiled into the exe.
 
 ## Settings & data paths
 

@@ -1,0 +1,7 @@
+{
+  "name": "Weather",
+  "category": "weather",
+  "description": "Weather widget",
+  "api_version": 1,
+  "version": 1
+}

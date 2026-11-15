@@ -1,0 +1,7 @@
+{
+  "name": "Clipboard",
+  "category": "productivity",
+  "description": "Recent clipboard history",
+  "api_version": 2,
+  "version": 1
+}

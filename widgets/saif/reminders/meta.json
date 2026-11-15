@@ -1,0 +1,7 @@
+{
+  "name": "Reminders",
+  "category": "productivity",
+  "description": "Tick off reminders and today's events",
+  "api_version": 2,
+  "version": 3
+}

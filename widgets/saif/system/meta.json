@@ -1,0 +1,7 @@
+{
+  "name": "System",
+  "category": "system",
+  "description": "CPU, memory and disk, in a small card",
+  "api_version": 1,
+  "version": 1
+}

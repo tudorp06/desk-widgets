@@ -1,0 +1,7 @@
+{
+  "name": "Minesweeper",
+  "category": "games",
+  "description": "Minesweeper with levels, in XP, Liquid Glass or Clean style",
+  "api_version": 1,
+  "version": 2
+}
