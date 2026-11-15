@@ -38,7 +38,7 @@ jobs:
           "tag=$tag"                      | Out-File $env:GITHUB_OUTPUT -Append
           "version=$($tag.Substring(1))"  | Out-File $env:GITHUB_OUTPUT -Append
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ steps.v.outputs.tag }}
 
