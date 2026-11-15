@@ -83,32 +83,48 @@ namespace DeskWidgets
     }
 
     // A scroll panel with smooth mouse-wheel interpolation: intercepts WM_MOUSEWHEEL and eases
-    // toward the target position using a critically-damped spring instead of jumping. Time-based, so
-    // the animation speed is consistent regardless of timer jitter. Scrollbar drags and programmatic
-    // scrolls stay instant. Used for the library window's content area.
+    // toward the target position on a critically damped spring instead of jumping. Programmatic
+    // scrolls ease the same way. Used for the library window's content area.
     //
     // All content lives inside an inner viewport panel. Scrolling moves that single panel instead of
     // repositioning every child control individually, so each frame is O(1) instead of O(n).
+    //
+    // What keeps it smooth, each learned the hard way:
+    //  - One step per screen refresh. A WinForms Timer fires every 10-16 ms regardless of when the
+    //    screen is drawn, so some refreshes got two steps and some none. A background thread waits
+    //    for the compositor (DwmFlush) and posts one step per frame; it only lives while scrolling.
+    //  - Time comes from a Stopwatch. Environment.TickCount moves in ~16 ms jumps, so the measured
+    //    frame time was 0, 16 or 31 ms more or less at random and the speed wobbled with it.
+    //  - The spring is solved exactly for the time that passed, so a late frame lands where it
+    //    should have instead of overshooting.
+    //  - What a step uncovers is painted in that same step. Left to WM_PAINT it arrives a frame
+    //    or two late, and the edge of the page flickers empty.
     sealed class SmoothPanel : Panel
     {
         internal readonly Panel viewport;
-        readonly Timer anim = new Timer { Interval = 10 };
+        readonly System.Diagnostics.Stopwatch clock = new System.Diagnostics.Stopwatch();
         float offset;
         float target;
         float velocity;
         bool animating;
-        int lastTick;
+        long lastFrame;      // clock ticks at the previous step
+        volatile int run;    // which frame thread is the current one; any other exits
+        int framePosted;     // 1 while a step is waiting on the UI thread, so they never pile up
         int contentHeight;
 
-        const float Stiffness = 256f; // spring constant (ω²), ω = 16
-        const float Damping = 32f;    // damping coefficient (2ω), critically damped
+        const float Omega = 16f; // the spring's natural frequency; critically damped
+
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        static extern int DwmFlush();
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool RedrawWindow(IntPtr hwnd, IntPtr rect, IntPtr region, uint flags);
+        const uint RDW_ALLCHILDREN = 0x80, RDW_UPDATENOW = 0x100;
 
         public SmoothPanel()
         {
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             viewport = new Panel();
             base.Controls.Add(viewport);
-            anim.Tick += OnTick;
         }
 
         public new ControlCollection Controls { get { return viewport.Controls; } }
@@ -142,32 +158,77 @@ namespace DeskWidgets
             viewport.Top = -(int)Math.Round(offset);
         }
 
-        void OnTick(object s, EventArgs e)
+        // Moves the page to offset and paints what that uncovered, now.
+        void Apply()
         {
-            int now = Environment.TickCount;
-            float dt = (now - lastTick) / 1000f;
-            if (dt <= 0 || dt > 0.1f) dt = 0.016f;
-            lastTick = now;
+            int top = -(int)Math.Round(offset);
+            if (viewport.Top == top) return;
+            viewport.Top = top;
+            if (IsHandleCreated) RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RDW_UPDATENOW | RDW_ALLCHILDREN);
+        }
+
+        // Starts stepping towards target, or carries on if it already is.
+        void Animate()
+        {
+            if (!IsHandleCreated) { offset = target; velocity = 0; Clamp(); return; } // nothing on screen to ease
+            if (animating) return;
+            animating = true;
+            clock.Restart();
+            lastFrame = 0;
+            int mine = ++run;
+            MethodInvoker step = delegate
+            {
+                System.Threading.Interlocked.Exchange(ref framePosted, 0);
+                if (mine == run && !IsDisposed) Step();
+            };
+            var frames = new System.Threading.Thread(delegate()
+            {
+                while (mine == run)
+                {
+                    // Returns at the next screen refresh. Without a compositor to wait for, pace it by hand.
+                    if (DwmFlush() != 0) System.Threading.Thread.Sleep(8);
+                    if (mine != run) break;
+                    if (System.Threading.Interlocked.CompareExchange(ref framePosted, 1, 0) != 0) continue;
+                    try { BeginInvoke(step); }
+                    catch (InvalidOperationException) { break; } // the window closed mid-scroll
+                }
+            });
+            frames.IsBackground = true;
+            frames.Start();
+        }
+
+        void StopAnimating()
+        {
+            animating = false;
+            run++;
+        }
+
+        void Step()
+        {
+            long now = clock.ElapsedTicks;
+            float dt = (now - lastFrame) / (float)System.Diagnostics.Stopwatch.Frequency;
+            lastFrame = now;
+            if (dt <= 0) return;
+            if (dt > 0.05f) dt = 0.05f; // the app was busy: don't leap
 
             target = Math.Min(target, MaxScroll);
 
-            float displacement = offset - target;
-            velocity += (-Stiffness * displacement - Damping * velocity) * dt;
-            float next = offset + velocity * dt;
+            // A critically damped spring after dt, exactly: x(t) = (x + (v + wx)t) e^-wt.
+            float x = offset - target;
+            float k = velocity + Omega * x;
+            float decay = (float)Math.Exp(-Omega * dt);
+            float next = (x + k * dt) * decay;
+            velocity = (velocity - Omega * k * dt) * decay;
 
-            if (Math.Abs(displacement) < 0.5f && Math.Abs(velocity) < 10f)
+            if (Math.Abs(next) < 0.5f && Math.Abs(velocity) < 10f)
             {
                 offset = target;
-                viewport.Top = -(int)Math.Round(target);
                 velocity = 0;
-                anim.Stop();
-                animating = false;
-                return;
+                StopAnimating();
             }
-
-            next = Math.Max(0, Math.Min(next, MaxScroll));
-            offset = next;
-            viewport.Top = -(int)Math.Round(next);
+            else
+                offset = Math.Max(0, Math.Min(target + next, MaxScroll));
+            Apply();
         }
 
         public void ScrollTo(float position)
@@ -175,10 +236,8 @@ namespace DeskWidgets
             position = Math.Max(0, Math.Min(position, MaxScroll));
             if (Math.Abs(offset - position) < 1f) return;
             target = position;
-            velocity = 0;
-            animating = true;
-            lastTick = Environment.TickCount;
-            anim.Start();
+            if (!animating) velocity = 0;
+            Animate();
         }
 
         public void ScrollToTop() { ScrollTo(0); }
@@ -202,9 +261,7 @@ namespace DeskWidgets
                 float step = -(delta / 120f) * WidgetWindow.Px(60);
                 if (!animating) { target = offset; velocity = 0; }
                 target = Math.Max(0, Math.Min(target + step, MaxScroll));
-                animating = true;
-                lastTick = Environment.TickCount;
-                anim.Start();
+                if (Math.Abs(target - offset) >= 0.5f) Animate();
                 return;
             }
             base.WndProc(ref m);
@@ -230,7 +287,7 @@ namespace DeskWidgets
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) anim.Dispose();
+            if (disposing) StopAnimating(); // lets the frame thread go
             base.Dispose(disposing);
         }
     }

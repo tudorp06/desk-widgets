@@ -38,9 +38,18 @@ namespace DeskWidgets
         readonly List<WidgetCard> installedCards = new List<WidgetCard>();
         readonly List<PluginRow> turnedOff = new List<PluginRow>();
         readonly List<SidebarItem> nav = new List<SidebarItem>();
-        readonly SidebarItem settings, account;
+        readonly SidebarItem settings, account, collapse;
+        // The sidebar narrows to a rail of icons (design/apple-design.md 17.3). Its text labels are
+        // real controls, so they are hidden for the rail; the rows just lose their text.
+        bool collapsed;
+        Anim sidebarAnim;
+        Label navTitle;
+        readonly List<Label> navLabels = new List<Label>();
+        static int SidebarWide { get { return Px(260); } }
+        static int SidebarNarrow { get { return Px(58); } }
         SidebarItem startupToggle, highPriorityToggle, pixelShiftToggle;
-        Label settingsAppearanceLabel;
+        Label settingsAppearanceLabel, settingsBackupLabel;
+        PillButton backupExport, backupRestore;
         SidebarItem[] themeItems;
         Label updateLabel, updateStatus;
         PillButton updateInstall;
@@ -78,7 +87,14 @@ namespace DeskWidgets
             BuildCards();
             content.Resize += delegate { LayoutContent(); };
 
-            sidebar = new Panel { Dock = DockStyle.Left, Width = Px(260), BackColor = Theme.SidebarBg };
+            collapsed = App.Current.SidebarCollapsed;
+            sidebar = new Panel { Dock = DockStyle.Left, Width = collapsed ? SidebarNarrow : SidebarWide, BackColor = Theme.SidebarBg };
+            // Top right of the sidebar, which is also where the rail's icons sit once it is narrow.
+            collapse = new SidebarItem('\uE700', "");
+            collapse.SetBounds(sidebar.Width - Px(12) - Px(34), Px(18), Px(34), Px(34));
+            collapse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            collapse.Click += delegate { ToggleSidebar(); };
+            sidebar.Controls.Add(collapse);
             BuildNav();
             settings = new SidebarItem('', "Settings");
             settings.SetBounds(Px(12), sidebar.Height - Px(50), sidebar.Width - Px(24), Px(34));
@@ -175,10 +191,11 @@ namespace DeskWidgets
 
         void BuildNav()
         {
-            foreach (var c in sidebar.Controls.Cast<Control>().Where(c => c != settings && c != account).ToArray()) { sidebar.Controls.Remove(c); c.Dispose(); }
+            foreach (var c in sidebar.Controls.Cast<Control>().Where(c => c != settings && c != account && c != collapse).ToArray()) { sidebar.Controls.Remove(c); c.Dispose(); }
             nav.Clear();
-            var title = new Label { Text = "Desk Widgets", Font = Theme.Title3, ForeColor = Theme.Label, AutoSize = true, Location = new Point(Px(24), Px(22)) };
-            sidebar.Controls.Add(title);
+            navLabels.Clear();
+            navTitle = new Label { Text = "Desk Widgets", Font = Theme.Title3, ForeColor = Theme.Label, AutoSize = true, Location = new Point(Px(24), Px(22)), Visible = !collapsed };
+            sidebar.Controls.Add(navTitle);
             int y = Px(72);
             AddNav('', "All Widgets", null, ref y);
             y += Px(12);
@@ -192,8 +209,9 @@ namespace DeskWidgets
 
         void AddGroupLabel(string text, ref int y)
         {
-            var l = new Label { Text = text, Font = Theme.CaptionEmphasized, ForeColor = Theme.Label2, AutoSize = true, Location = new Point(Px(24), y) };
+            var l = new Label { Text = text, Font = Theme.CaptionEmphasized, ForeColor = Theme.Label2, AutoSize = true, Location = new Point(Px(24), y), Visible = !collapsed };
             sidebar.Controls.Add(l);
+            navLabels.Add(l);
             y += Px(24);
         }
 
@@ -221,6 +239,29 @@ namespace DeskWidgets
             y += Px(36);
         }
 
+        // Wide <-> rail. The labels go before it narrows and come back once it is wide again, so
+        // they are never seen cut in half; the rows' own text gives way as the width does.
+        void ToggleSidebar()
+        {
+            collapsed = !collapsed;
+            App.Current.SidebarCollapsed = collapsed;
+            if (collapsed) ShowNavLabels(false);
+            if (sidebarAnim != null) sidebarAnim.Cancel();
+            int to = collapsed ? SidebarNarrow : SidebarWide;
+            sidebarAnim = Anim.Run(sidebar.Width, to, 180, delegate(float v) { sidebar.Width = (int)Math.Round(v); }, delegate
+            {
+                sidebarAnim = null;
+                sidebar.Width = to;
+                ShowNavLabels(!collapsed);
+            });
+        }
+
+        void ShowNavLabels(bool show)
+        {
+            if (navTitle != null) navTitle.Visible = show;
+            foreach (var l in navLabels) l.Visible = show;
+        }
+
         void ShowPage(string target) { ShowPage(target, true); }
 
         // navigating: someone picked this page. Going to a page starts at its top and slides in;
@@ -242,8 +283,10 @@ namespace DeskWidgets
                 header.Set("Settings", "");
             else if (target == ExplorePage)
             {
-                header.Set("Explore", "Widgets made by the community. Each one is reviewed before it appears here.");
-                if (!exploreLoading) LoadExplore(); // every visit, so newly approved widgets show up
+                header.Set("Explore", "Reviewed widgets from the community. Drag one onto your desktop, or choose Get.");
+                // Only when someone comes here. Installing a widget shows this page again to
+                // rebuild the cards, and that used to reload the whole list every time.
+                if (navigating || exploreCards.Count == 0) LoadExplore();
             }
             else if (target == InstalledPage)
                 header.Set("Installed", "Widgets you installed. Drag one onto your desktop to use it.");
@@ -282,6 +325,9 @@ namespace DeskWidgets
             highPriorityToggle.Visible = settingsOpen;
             pixelShiftToggle.Visible = settingsOpen;
             settingsAppearanceLabel.Visible = settingsOpen;
+            settingsBackupLabel.Visible = settingsOpen;
+            backupExport.Visible = settingsOpen;
+            backupRestore.Visible = settingsOpen;
             updateLabel.Visible = settingsOpen;
             updateRefresh.Visible = settingsOpen && !App.IsPackaged;
             updateStatus.Visible = settingsOpen && updateStatus.Visible;
@@ -466,6 +512,17 @@ namespace DeskWidgets
             };
             content.Controls.Add(updateRefresh);
 
+            settingsBackupLabel = new Label { Text = "Backup", Font = Theme.CaptionEmphasized, ForeColor = Theme.Label2, AutoSize = true };
+            content.Controls.Add(settingsBackupLabel);
+
+            backupExport = new PillButton("Export Backup…", ButtonStyle.Grey);
+            backupExport.Click += delegate { Backup.Export(); };
+            content.Controls.Add(backupExport);
+
+            backupRestore = new PillButton("Restore from Backup…", ButtonStyle.Grey);
+            backupRestore.Click += delegate { Backup.Import(); };
+            content.Controls.Add(backupRestore);
+
             uninstallButton = new PillButton("Uninstall Desk Widgets", ButtonStyle.Destructive);
             uninstallButton.Click += delegate { App.Current.UninstallApp(); };
             content.Controls.Add(uninstallButton);
@@ -502,7 +559,13 @@ namespace DeskWidgets
             }
             if (updateStatus.Visible)
                 updateStatus.Location = new Point(right - updateStatus.PreferredWidth, midY);
-            y += Px(44);
+            y += Px(44) + Px(12);
+
+            settingsBackupLabel.Location = new Point(pad, y);
+            y += settingsBackupLabel.Height + Px(8);
+            backupExport.Location = new Point(pad, y);
+            backupRestore.Location = new Point(backupExport.Right + Px(8), y);
+            y += backupExport.Height + Px(24);
 
             uninstallButton.Location = new Point(pad, y);
             y += uninstallButton.Height + Px(16);
@@ -585,6 +648,11 @@ namespace DeskWidgets
 
         // ---- Explore ----
 
+        static string ExploreKey(Community.Listing l) { return l.Id + "_" + l.Version; }
+
+        // Explore keeps what it has. The cards come from the kept list first (Community.KeptExplore),
+        // and the gallery is asked only when that copy has gone stale. Whatever comes back is merged
+        // into the cards already up, so nothing blinks and the page stays where it was scrolled to.
         void LoadExplore()
         {
             if (!Community.Configured)
@@ -592,51 +660,95 @@ namespace DeskWidgets
                 exploreState.Set("Explore Isn’t Connected Yet", "Community widgets appear here once the gallery is online.");
                 return;
             }
+            if (exploreLoading) return;
+            bool empty = exploreCards.Count == 0;
+            if (!empty && Community.ExploreFresh) return;
             exploreLoading = true;
-            // The cards from the last visit stay up while the list reloads.
-            if (exploreCards.Count == 0) exploreState.Set("Loading…", "");
+            if (empty) exploreState.Set("Loading…", "");
+            // Cards that already show their picture keep it: only the rest are read or downloaded.
+            var pictured = new HashSet<string>(exploreCards.Where(c => c.HasPreview).Select(c => ExploreKey(c.Listing)));
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
+                if (empty)
+                {
+                    List<Community.Listing> kept = Community.KeptExplore();
+                    if (kept != null && kept.Count > 0)
+                    {
+                        var pictures = Community.FetchPreviews(kept, true);
+                        foreach (var l in kept) if (pictures[l] != null) pictured.Add(ExploreKey(l));
+                        bool fresh = Community.ExploreFresh;
+                        List<string> mine = fresh ? MyLikes() : null;
+                        App.RunOnUi(delegate { ShowExplore(kept, pictures, mine, fresh); });
+                        if (fresh) return;
+                    }
+                }
                 List<Community.Listing> list = null;
                 var previews = new Dictionary<Community.Listing, Bitmap>();
-                var liked = new List<string>();
                 try
                 {
                     list = Community.Explore();
-                    previews = Community.FetchPreviews(list);
+                    previews = Community.FetchPreviews(list.Where(l => !pictured.Contains(ExploreKey(l))).ToList(), false);
                     Community.PrunePreviews(list);
                 }
                 catch (Exception) { list = null; }
-                // Which of them you have liked, so the hearts start filled. Signed out, or if this
-                // call fails, every heart is simply empty: it never costs you the list itself.
-                try { liked = Account.MyLikes(); }
-                catch (Exception) { }
-                App.RunOnUi(delegate
-                {
-                    exploreLoading = false;
-                    if (IsDisposed) { foreach (var b in previews.Values) if (b != null) b.Dispose(); return; }
-                    if (list == null)
-                    {
-                        // Offline: keep the cards from the last visit if there are any.
-                        if (exploreCards.Count == 0)
-                            exploreState.Set("Explore Couldn’t Load", "Check your connection, then open Explore again.");
-                    }
-                    else
-                    {
-                        foreach (var old in exploreCards) { content.Controls.Remove(old); old.Dispose(); }
-                        exploreCards.Clear();
-                        if (list.Count == 0) exploreState.Set("Nothing Here Yet", "Reviewed community widgets will appear here.");
-                        else exploreState.Set("No Matches", "No widget here matches what you typed.");
-                        foreach (var l in list)
-                        {
-                            var c = new ExploreCard(l, previews[l]) { Liked = liked.Contains(l.Id) };
-                            exploreCards.Add(c);
-                            content.Controls.Add(c);
-                        }
-                    }
-                    LayoutContent();
-                });
+                List<string> liked = MyLikes();
+                App.RunOnUi(delegate { ShowExplore(list, previews, liked, true); });
             });
+        }
+
+        // Which widgets you have liked, so the hearts start filled. Signed out there are none; null
+        // when the call fails, which leaves the hearts as they are and never costs you the list.
+        static List<string> MyLikes()
+        {
+            try { return Account.MyLikes(); }
+            catch (Exception) { return null; }
+        }
+
+        // Puts a list on the page by changing as little as possible: a card whose widget and
+        // version are still listed stays (with its new counts), new ones are added, and the ones
+        // no longer listed go. list is null when the gallery couldn't be reached.
+        void ShowExplore(List<Community.Listing> list, Dictionary<Community.Listing, Bitmap> previews, List<string> liked, bool done)
+        {
+            if (done) exploreLoading = false;
+            if (IsDisposed || list == null)
+            {
+                foreach (var b in previews.Values) if (b != null) b.Dispose();
+                // Offline: keep the cards from before if there are any.
+                if (!IsDisposed && exploreCards.Count == 0)
+                {
+                    exploreState.Set("Explore Couldn’t Load", "Check your connection, then open Explore again.");
+                    LayoutContent();
+                }
+                return;
+            }
+            var old = new Dictionary<string, ExploreCard>();
+            foreach (var c in exploreCards) old[ExploreKey(c.Listing)] = c;
+            exploreCards.Clear();
+            content.SuspendLayout();
+            foreach (var l in list)
+            {
+                Bitmap picture;
+                previews.TryGetValue(l, out picture);
+                ExploreCard card;
+                if (old.TryGetValue(ExploreKey(l), out card))
+                {
+                    old.Remove(ExploreKey(l));
+                    card.Relist(l, picture);
+                }
+                else
+                {
+                    card = new ExploreCard(l, picture);
+                    content.Controls.Add(card);
+                }
+                if (liked != null) card.Liked = liked.Contains(l.Id);
+                card.Invalidate();
+                exploreCards.Add(card);
+            }
+            foreach (var gone in old.Values) { content.Controls.Remove(gone); gone.Dispose(); }
+            content.ResumeLayout();
+            if (list.Count == 0) exploreState.Set("Nothing Here Yet", "Reviewed community widgets will appear here.");
+            else exploreState.Set("No Matches", "No widget here matches what you typed.");
+            LayoutContent();
         }
 
         // ---- account ----
@@ -702,6 +814,7 @@ namespace DeskWidgets
             Theme.ApplyToWindow(Handle);
             Theme.ApplyToScrollbars(content.Handle);
             settingsAppearanceLabel.ForeColor = Theme.Label2;
+            settingsBackupLabel.ForeColor = Theme.Label2;
             updateLabel.ForeColor = Theme.Label;
             BuildNav();
             ShowPage(page, false); // a repaint for the new theme, not a move to another page
@@ -773,6 +886,24 @@ namespace DeskWidgets
         }
 
         protected static int Px(float v) { return WidgetWindow.Px(v); }
+
+        // A picture at the size it is drawn. Cards used to scale their preview on every paint,
+        // and a scroll repaints a row of them each frame: that scaling was most of the stutter.
+        // The caller keeps the copy and disposes it.
+        protected static Bitmap Fitted(Bitmap source, ref Bitmap kept, int w, int h)
+        {
+            if (kept != null && kept.Width == w && kept.Height == h) return kept;
+            if (kept != null) { kept.Dispose(); kept = null; }
+            if (w < 1 || h < 1) return null;
+            kept = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (Graphics g = Graphics.FromImage(kept))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.DrawImage(source, new Rectangle(0, 0, w, h));
+            }
+            return kept;
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -949,7 +1080,8 @@ namespace DeskWidgets
                 TextRenderer.DrawText(g, Glyph.ToString(), Theme.Icons, new Rectangle(Px(12), 0, Px(20), Height), Theme.Link, flags);
             bool hasSub = !string.IsNullOrEmpty(Subtitle);
             int textW = Width - Px(46) - (Toggle ? Px(44) : 0);
-            if (hasSub)
+            if (textW < Px(24)) { } // the sidebar's rail: the icon alone
+            else if (hasSub)
             {
                 int top = (Height - Px(16) - Px(14)) / 2;
                 TextRenderer.DrawText(g, Text, selectedValue ? Theme.Font(14, 600) : Theme.Font(14),
@@ -1085,12 +1217,17 @@ namespace DeskWidgets
     }
 
     // A community widget in Explore: its preview, name, author and category. Get installs it,
-    // Update installs a newer version, and Uninstall removes it.
+    // Update installs a newer version, and Uninstall removes it. Dragged onto the desktop, it asks
+    // to install first (when it isn't already) and then lands where it was let go.
     sealed class ExploreCard : PaintedControl
     {
-        readonly Community.Listing listing;
-        readonly Bitmap preview; // may be null
+        Community.Listing listing;
+        Bitmap preview; // may be null
+        Bitmap fitted;  // preview at the size the card draws it
         readonly PillButton button;
+        bool pressed, dragging, dragged; // dragged: this press turned into a drag, so it is not a tap
+        Point downAt;
+        DragGhost ghost;
 
         public ExploreCard(Community.Listing listing, Bitmap preview)
         {
@@ -1107,6 +1244,20 @@ namespace DeskWidgets
 
         public Community.Listing Listing { get { return listing; } }
         public bool Liked;
+        public bool HasPreview { get { return preview != null; } }
+
+        // The same widget and version, listed again: new counts and wording, same card. The
+        // picture is taken only if this card had none; the card owns whichever it keeps.
+        public void Relist(Community.Listing fresh, Bitmap picture)
+        {
+            listing = fresh;
+            if (picture != null)
+            {
+                if (preview == null) preview = picture;
+                else picture.Dispose();
+            }
+            RefreshState();
+        }
 
         // What the search box narrows on: everything the card itself shows. An empty query matches.
         public bool Matches(string query)
@@ -1295,7 +1446,8 @@ namespace DeskWidgets
             {
                 float scale = Math.Min(box / (float)preview.Width, imgH / (float)preview.Height);
                 int pw = (int)(preview.Width * scale), ph = (int)(preview.Height * scale);
-                g.DrawImage(preview, new Rectangle((Width - pw) / 2, imgTop + (imgH - ph) / 2, pw, ph));
+                Bitmap picture = Fitted(preview, ref fitted, pw, ph);
+                if (picture != null) g.DrawImageUnscaled(picture, (Width - pw) / 2, imgTop + (imgH - ph) / 2);
             }
             else
                 TextRenderer.DrawText(g, "No Preview", Theme.Footnote, new Rectangle(pad, imgTop, box, imgH), Theme.Label2, BackColor,
@@ -1339,11 +1491,69 @@ namespace DeskWidgets
             }
         }
 
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            // The heart is a button: pressing it never starts a drag.
+            if (e.Button != MouseButtons.Left || HeartRect.Contains(e.Location)) return;
+            pressed = true;
+            dragged = false;
+            downAt = e.Location;
+        }
+
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
+            if (dragging)
+            {
+                if (ghost != null) ghost.CenterOn(Cursor.Position);
+                return;
+            }
+            if (pressed && e.Button == MouseButtons.Left)
+            {
+                Size slop = SystemInformation.DragSize;
+                if (Math.Abs(e.X - downAt.X) < slop.Width && Math.Abs(e.Y - downAt.Y) < slop.Height) return;
+                dragging = dragged = true;
+                // The gallery's picture stands in for the widget, which isn't on this PC yet.
+                if (preview != null)
+                {
+                    ghost = new DragGhost(preview);
+                    ghost.CenterOn(Cursor.Position);
+                    ghost.Show();
+                }
+                return;
+            }
             Cursor want = HeartRect.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
             if (Cursor != want) Cursor = want;
+        }
+
+        // WinForms may release capture before or after MouseUp, so both paths finish the drag.
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            if (!Capture) Drop();
+        }
+
+        void Drop()
+        {
+            pressed = false;
+            if (!dragging) return;
+            EndDrag();
+            // Let go outside the library window = put it there.
+            Point at = Cursor.Position;
+            Form f = FindForm();
+            if (f == null || f.Bounds.Contains(at)) return;
+            PluginInfo p = Installed;
+            // Already here: place the one you have, whatever version it is. Otherwise the install
+            // dialog comes first, and the widget lands at this spot once you have agreed.
+            if (p != null && p.Type != null) App.Current.AddWidget(p.Type, at);
+            else Community.Install(listing.Id, listing.Version, at);
+        }
+
+        void EndDrag()
+        {
+            dragging = false;
+            if (ghost != null) { ghost.Dispose(); ghost = null; }
         }
 
         protected override void OnMouseEnter(EventArgs e)
@@ -1368,7 +1578,8 @@ namespace DeskWidgets
             base.OnMouseUp(e);
             if (e.Button == MouseButtons.Left)
             {
-                if (HeartRect.Contains(e.Location)) ToggleLike();
+                Drop();
+                if (!dragged && HeartRect.Contains(e.Location)) ToggleLike();
                 return;
             }
             if (e.Button != MouseButtons.Right) return;
@@ -1394,9 +1605,10 @@ namespace DeskWidgets
         {
             if (disposing)
             {
+                EndDrag();
                 if (preview != null) preview.Dispose();
-                // Stop the count animation: its tick holds this card, and the list is rebuilt on
-                // every visit to Explore.
+                if (fitted != null) { fitted.Dispose(); fitted = null; }
+                // Stop the count animation: its tick holds this card.
                 if (revealAnim != null) { revealAnim.Cancel(); revealAnim = null; }
                 if (holdAnim != null) { holdAnim.Cancel(); holdAnim = null; }
             }
@@ -1410,6 +1622,7 @@ namespace DeskWidgets
     {
         readonly WidgetType type;
         readonly Bitmap preview;   // rendered at the real widget size, reused for the drag ghost
+        Bitmap fitted;             // preview at the size the card draws it
         bool dragging;
         Point downAt;
         DragGhost ghost;
@@ -1438,7 +1651,8 @@ namespace DeskWidgets
             // author's DPI produced, and capping at 1x made the same widget a different size here.
             float scale = Math.Min(boxW / (float)preview.Width, box / (float)preview.Height);
             int pw = (int)(preview.Width * scale), ph = (int)(preview.Height * scale);
-            g.DrawImage(preview, new Rectangle((Width - pw) / 2, pad + (box - ph) / 2, pw, ph));
+            Bitmap picture = Fitted(preview, ref fitted, pw, ph);
+            if (picture != null) g.DrawImageUnscaled(picture, (Width - pw) / 2, pad + (box - ph) / 2);
 
             int textTop = pad + box + Px(8), lineW = Width - pad * 2;
             var flags = TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding;
@@ -1548,6 +1762,7 @@ namespace DeskWidgets
             {
                 EndDrag();
                 preview.Dispose();
+                if (fitted != null) { fitted.Dispose(); fitted = null; }
             }
             base.Dispose(disposing);
         }

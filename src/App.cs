@@ -767,6 +767,13 @@ namespace DeskWidgets
             }
         }
 
+        // The library's sidebar narrowed to its icons. Remembered, like the window's other choices.
+        public bool SidebarCollapsed
+        {
+            get { return AppSection.GetBool("sidebar_collapsed", false); }
+            set { AppSection.Set("sidebar_collapsed", value); }
+        }
+
         public bool HighPriority
         {
             get { return AppSection.GetBool("high_priority", false); }
