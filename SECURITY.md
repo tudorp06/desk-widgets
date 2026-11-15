@@ -12,9 +12,9 @@ You'll get an answer within a week. Please don't test against other people's acc
 ## What's in scope
 
 - Getting code installed or run that the owner didn't approve, or that differs from what was
-  reviewed (the upload › review › `deskwidgets://` › hash check › compile chain)
-- Reading or changing data that row level security should protect (`server/schema.sql`)
-- The Edge Functions (`server/functions/`): invites and sign-in
+  reviewed (the pull request › review › `deskwidgets://` › hash check › compile chain)
+- Getting past the pull request check (`.github/workflows/widgets.yml`): changing someone else's
+  widget, or making the check run code from a pull request
 - Script injection on the website (`docs/`)
 - Tokens or passwords stored or sent unsafely by the app
 
@@ -23,4 +23,7 @@ vulnerability, but report it the same way so the owner can act on it.
 
 ## How it's built to be safe
 
-See "Threat model" in `design/community-plan.md` and the comments at the top of `server/schema.sql`.
+The gallery is the `widgets/` folder: a widget is published by merging a pull request, the app
+installs only bytes whose SHA-256 is the one in the published gallery, and it always asks first.
+See the comments at the top of `.github/workflows/widgets.yml` and `tools/widget-rules.mjs`.
+"Threat model" in `design/community-plan.md` describes the earlier design, with a database.

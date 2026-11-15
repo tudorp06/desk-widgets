@@ -284,7 +284,7 @@ namespace DeskWidgets
         // CVE-2021-42574): line breaks only the compiler honors (lone CR, U+0085, U+2028, U+2029),
         // invisible characters and bidi controls. A hash proves code didn't change after review, not
         // that the reviewer saw what runs, so code containing any of these is never compiled. Same
-        // rule as source_is_plain (server/schema.sql) and hiddenCharacters (docs/assets/site.js).
+        // rule as hiddenCharacter (tools/widget-rules.mjs) and the marker in docs/assets/site.js.
         public static bool IsHidden(string text, int i)
         {
             char c = text[i];

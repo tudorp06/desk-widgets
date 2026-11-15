@@ -1,5 +1,10 @@
 # Community widgets: accounts, uploads, Explore
 
+> **Superseded in 1.9 (November 2026).** This is the original design, kept as history: accounts,
+> uploads and a Supabase database. None of it is in the repository any more. The gallery is now
+> the `widgets/` folder, published as files on the website and changed by pull request; see
+> "Website" in `CLAUDE.md` and the publishing guide (`docs/develop.html`).
+
 Status: steps 1 to 5 are built. What's left needs accounts only the owner has: create the
 Supabase project, run `server/schema.sql`, deploy the invite function, put the URL and anon key in
 `docs/config.js` and `src/Community.cs`, turn on GitHub Pages for `docs/`, and publish a release

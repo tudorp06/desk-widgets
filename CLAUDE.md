@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 build.bat                              # builds bin\DeskWidgets.exe (C# 5, .NET Framework 4, no NuGet)
 bin\DeskWidgets.exe                    # run (adds itself to Start menu on first launch)
 bin\DeskWidgets.exe --background       # launch without opening the library window (Start with Windows mode)
-cd server\test && npm ci && npm test   # database schema tests (PGlite, Node)
+node tools\build-widget-pages.mjs      # builds the gallery (docs\w) from widgets\, and checks every widget
 ```
 
 There is no solution/csproj file. `build.bat` calls the .NET Framework csc.exe that ships with
@@ -145,14 +145,6 @@ PC is locked. Slow work (network, disk, image decoding) runs on background threa
 from bytes (no file lock) → find the `[DeskWidget]` class → compiled delegate for its constructor.
 The source's SHA-256 must match the reviewed hash from the gallery.
 
-### Server (`server/`)
-
-- `schema.sql` — Supabase Postgres schema (RLS, `explore` view, `versions` table).
-- `test/schema.test.mjs` — PGlite tests for RLS and schema rules. Every new DB rule needs a test.
-- `freeze.sql` — closes the Supabase gallery to uploads, approvals and account requests, while
-  older copies of the app keep reading it. Run by hand in the Supabase SQL editor; running
-  `schema.sql` again undoes it. The whole folder goes when the Supabase project is deleted.
-
 ### Website (`docs/`)
 
 Static site served by GitHub Pages from `main`. `docs/assets/site.js` has the shared JS;
@@ -181,9 +173,9 @@ changes, and the widget compiles against the app built from `main`. That workflo
 out or runs a file from the pull request.
 
 The app reads the same files (`src/Community.cs`). It has no account and sends nothing about
-what was installed, so there are no likes or install counts. Copies of the app older than 1.9
-still read Supabase until it is shut down; `server/` and `tools/export-gallery.mjs` are what is
-left of it and go when it does.
+what was installed, so there are no likes or install counts. There is no server and no database.
+Copies of the app older than 1.9 read a Supabase project that is no longer part of this
+repository; they lose Explore when it is deleted, and nothing here can change that.
 
 ## Performance expectations
 

@@ -1,7 +1,7 @@
 # Fails when a tracked text file contains a character that can make code read differently from how
 # it runs ("Trojan Source"): a lone CR, other control characters except tab and LF, U+0085, U+2028,
 # U+2029, zero-width and bidi characters, or a byte order mark after the start. Same rule as
-# source_is_plain (server/schema.sql), Plugins.IsHidden (src) and hiddenCharacters (docs).
+# hiddenCharacter (tools/widget-rules.mjs), Plugins.IsHidden (src) and the marker in docs/assets/site.js.
 # Runs from build.bat and from the pre-commit hook in .githooks. Usage:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\check-hidden.ps1 [-Staged]
 param([switch]$Staged)
