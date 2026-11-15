@@ -13,7 +13,8 @@
   <main class="content section" id="page"></main>
 
   <script type="module">
-    import { nav, el, art, getButton, supabase, configured, categoryName, isValidId, notice, formatDate, visibleSource, avatar } from "./assets/site.js";
+    import { nav, el, artFrom, getButton, supabase, configured, categoryName, isValidId, notice, formatDate, visibleSource, avatar } from "./assets/site.js";
+    import { getLivePreviews } from "./assets/data.js";
 
     nav(null);
     const page = document.getElementById("page");
@@ -26,20 +27,22 @@
         const db = await supabase();
         // Only approved versions are readable without an account (RLS), newest first.
         const { data: versions, error } = await db.from("versions")
-          .select("version, name, category, description, api_version, source, preview, sha256, reviewed_at")
+          .select("version, name, category, description, api_version, source, sha256, reviewed_at")
           .eq("widget_id", id).eq("status", "approved").order("version", { ascending: false });
         if (error) throw error;
         if (!versions || !versions.length) { page.replaceChildren(notice("This widget isn't available.", true)); return; }
+        // The picture is a file on this site (data.js); started now, shown with the rest.
+        const picture = getLivePreviews([{ id, version: versions[0].version }]).catch(() => new Map());
         const { data: listed } = await db.from("explore").select("author").eq("id", id).maybeSingle();
         const { data: author } = listed
           ? await db.from("authors").select("username, bio, avatar_thumb").eq("username", listed.author).maybeSingle() : { data: null };
-        show(versions, author || { username: listed ? listed.author : "", bio: "" });
+        show(versions, author || { username: listed ? listed.author : "", bio: "" }, (await picture).get(id) || null);
       } catch (e) {
         page.replaceChildren(notice("This page couldn't load. Check your connection and reload.", true));
       }
     }
 
-    function show(versions, author) {
+    function show(versions, author, preview) {
       const w = versions[0];
       document.title = w.name + " · Desk Widgets";
       const kb = Math.max(1, Math.round(new TextEncoder().encode(w.source).length / 1024));
@@ -47,7 +50,7 @@
 
       page.replaceChildren(
         el("div", { class: "product" },
-          art(w.preview, w.name),
+          artFrom(preview, w.name),
           el("div", {},
             el("h1", { class: "t-large" }, w.name),
             el("p", { class: "subtitle" }, w.description || categoryName(w.category)),

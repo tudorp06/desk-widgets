@@ -171,14 +171,14 @@
       previewBatchTimer = null;
       const batch = new Map(pendingPreviews);
       pendingPreviews.clear();
-      const ids = [...batch.keys()];
+      const asked = widgets.filter(w => batch.has(w.id));
       try {
-        const map = await getPreviews(ids, "assets/img/");
+        const map = await getPreviews(asked, "assets/img/");
         for (const [id, artEl] of batch) {
           const preview = map.get(id);
           const w = widgets.find(w => w.id === id);
           artEl.className = "art";
-          if (preview) artEl.replaceChildren(el("img", { src: "data:image/png;base64," + preview, alt: (w ? w.name : id) + " preview" }));
+          if (preview) artEl.replaceChildren(el("img", { src: preview, alt: (w ? w.name : id) + " preview" }));
           else artEl.replaceChildren(categoryIcon(w ? w.category : null));
         }
       } catch {
