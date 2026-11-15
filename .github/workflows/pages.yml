@@ -1,0 +1,68 @@
+name: Website
+
+# Publishes docs/ to GitHub Pages, with every approved widget's page and preview picture
+# (docs/w/, tools/build-widget-pages.mjs) brought up to date with the gallery first.
+#
+# Why a workflow instead of "deploy from the main branch": the previews have to be files on the
+# site, because reading them from the database on every visit used up its egress quota, and a
+# widget approved today needs its file today. main only takes pull requests, so nothing can
+# commit the new file there. This builds it into the published copy instead; the copy of docs/w
+# in the repository is only the starting point and may lag behind.
+#
+# Needs Settings > Pages > Source set to "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "tools/build-widget-pages.mjs", ".github/workflows/pages.yml"]
+  schedule:
+    - cron: "17 * * * *"   # hourly: how long a newly approved widget waits for its page
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish the website
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      # What the last publish exported, so a preview is downloaded from the database once, not
+      # once an hour. The script checks all of it against the gallery, so an old copy is safe.
+      - uses: actions/cache/restore@v6
+        with:
+          path: docs/w
+          key: widget-pages-${{ github.run_id }}
+          restore-keys: widget-pages-
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Bring widget pages and previews up to date
+        id: pages
+        run: node tools/build-widget-pages.mjs
+      # An hourly run with nothing new stops here.
+      - uses: actions/configure-pages@v6
+        if: github.event_name != 'schedule' || steps.pages.outputs.changed == 'true'
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'schedule' || steps.pages.outputs.changed == 'true'
+        with:
+          path: docs
+      - uses: actions/deploy-pages@v5
+        id: deploy
+        if: github.event_name != 'schedule' || steps.pages.outputs.changed == 'true'
+      # Saved only once it is live, so a failed publish is tried again next hour.
+      - uses: actions/cache/save@v6
+        if: steps.deploy.outcome == 'success'
+        with:
+          path: docs/w
+          key: widget-pages-${{ github.run_id }}

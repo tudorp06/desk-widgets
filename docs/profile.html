@@ -30,7 +30,7 @@
   </main>
 
   <script type="module">
-    import { nav, el, art, avatar, notice, widgetCard, me } from "./assets/site.js";
+    import { nav, el, artFrom, avatar, notice, widgetCard, me } from "./assets/site.js";
     import { available, getProfile, getWidgets, getPreviews, getMyVersions, getPhoto } from "./assets/data.js";
 
     nav(null);
@@ -70,7 +70,7 @@
 
         const [versions, previews] = await Promise.all([
           owner ? getMyVersions().catch(() => []) : Promise.resolve([]),
-          getPreviews(approved.map((w) => w.id), "assets/img/").catch(() => new Map()),
+          getPreviews(approved, "assets/img/").catch(() => new Map()),
         ]);
 
         const latest = new Map();
@@ -123,7 +123,7 @@
         grid.replaceChildren(...shown.map((w) => {
           const newest = latest.get(w.id);
           const status = w.status || (newest && newest.status !== "approved" ? newest.status : undefined);
-          return widgetCard(w, art(previews.get(w.id) || null, w.name, w.category),
+          return widgetCard(w, artFrom(previews.get(w.id) || null, w.name, w.category),
             { author: false, status });
         }));
       } catch (e) {

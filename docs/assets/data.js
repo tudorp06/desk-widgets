@@ -7,7 +7,7 @@
 //
 // Anywhere else, the rows are always real: the published site has no dev host, so it can never
 // serve sample data, and with no keys it reports "not connected", as before.
-import { supabase, configured, me, restQuery, isUsername } from "./site.js";
+import { supabase, configured, me, restQuery, isUsername, previewSrc } from "./site.js";
 
 const DEV = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === "file:";
 const LIVE = new URLSearchParams(location.search).has("live");
@@ -86,12 +86,44 @@ export async function getPhoto(username, onlyIfNoThumb = false) {
   return rows.length ? rows[0].avatar : null;
 }
 
-// id -> base64 PNG (or null), for the previews the grid asks for as cards scroll into view.
-export async function getPreviews(ids, basePath) {
-  if (!ids.length) return new Map();
-  if (usingMocks) return withTimeout(mocks().then((m) => m.previewsFor(ids, basePath)));
-  const data = await restQuery("explore?" + new URLSearchParams({ select: "id,preview", id: "in.(" + ids.join(",") + ")" }));
-  return new Map(data.map((row) => [row.id, row.preview]));
+// Previews are files on this site (w/<id>/preview.png), not database reads: they are ~100 KB
+// each, and fetching them through the database API on every visit used up its egress quota.
+// tools/build-widget-pages.mjs exports them and lists what it exported in w/previews.json:
+// id -> { version, preview }. Unreadable means empty, and every preview comes from the database.
+let published = null;
+function publishedPreviews() {
+  if (!published) published = fetch(new URL("../w/previews.json", import.meta.url), { signal: AbortSignal.timeout(TIMEOUT) })
+    .then((response) => (response.ok ? response.json() : {}))
+    .catch(() => ({}));
+  return published;
+}
+
+// id -> an <img> src (or null for no preview), for widgets given as { id, version }. The file
+// when that exact version has been exported; the database only for one approved since then.
+// The version in the address makes a new version's picture a new URL, past any cache.
+export async function getLivePreviews(widgets) {
+  const files = await publishedPreviews();
+  const out = new Map(), ask = [];
+  for (const w of widgets) {
+    const file = files && Object.hasOwn(files, w.id) ? files[w.id] : null;
+    if (!file || file.version !== w.version) ask.push(w.id);
+    else out.set(w.id, file.preview
+      ? new URL("../w/" + encodeURIComponent(w.id) + "/preview.png?v=" + encodeURIComponent(w.version), import.meta.url).href
+      : null);
+  }
+  if (ask.length) {
+    const data = await restQuery("explore?" + new URLSearchParams({ select: "id,preview", id: "in.(" + ask.join(",") + ")" }));
+    for (const row of data) out.set(row.id, previewSrc(row.preview));
+  }
+  return out;
+}
+
+// The same, or the sample pictures on a dev host.
+export async function getPreviews(widgets, basePath) {
+  if (!widgets.length) return new Map();
+  if (!usingMocks) return getLivePreviews(widgets);
+  const samples = await withTimeout(mocks().then((m) => m.previewsFor(widgets.map((w) => w.id), basePath)));
+  return new Map([...samples].map(([id, preview]) => [id, previewSrc(preview)]));
 }
 
 export async function usernameTaken(username) {

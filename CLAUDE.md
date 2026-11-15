@@ -141,6 +141,14 @@ Static site served by GitHub Pages from `main`. `docs/assets/site.js` has the sh
 individual pages (explore, upload, profile, admin, login, etc.) are self-contained HTML.
 `docs/config.js` has the publishable Supabase key.
 
+Widget previews are files on the site, not database reads: `tools/build-widget-pages.mjs` exports
+each approved version's preview to `docs/w/<id>/preview.png` and lists them in
+`docs/w/previews.json`; `getPreviews` in `docs/assets/data.js` uses the file and asks the
+database only for a version not exported yet. Never fetch `preview` (or a full `avatar`) from
+Supabase in a list or on every page view: that exhausted the free plan's 5 GB egress once.
+`.github/workflows/pages.yml` runs the script hourly and publishes the site, since `main` only
+takes pull requests and nothing can commit a new preview there.
+
 ## Performance expectations
 
 ~33 MB memory, ~0.3% CPU with seven widgets on-screen. Measure before and after anything that

@@ -515,11 +515,17 @@ export function personCard(profile, count, options = {}) {
     : el("div", { class: "profile-card still" }, parts);
 }
 
-// A widget's preview as an <img>, or a quiet placeholder.
-export function art(preview, name, category) {
-  if (typeof preview === "string" && preview.length > 0 && preview.length <= 140000 && BASE64.test(preview))
-    return el("div", { class: "art" }, el("img", { src: "data:image/png;base64," + preview, alt: name + " preview" }));
-  return el("div", { class: "art" }, categoryIcon(category));
+// A preview as the database holds it (base64 PNG) -> something an <img> can show, or null.
+export function previewSrc(preview) {
+  return typeof preview === "string" && preview.length > 0 && preview.length <= 140000 && BASE64.test(preview)
+    ? "data:image/png;base64," + preview : null;
+}
+
+// A widget's preview as an <img>, or a quiet placeholder. art takes the base64 from a database
+// row; artFrom takes what getPreviews (data.js) answers with, which is usually a file's address.
+export function art(preview, name, category) { return artFrom(previewSrc(preview), name, category); }
+export function artFrom(src, name, category) {
+  return el("div", { class: "art" }, src ? el("img", { src, alt: name + " preview" }) : categoryIcon(category));
 }
 
 // Opens Desk Widgets on this PC; it re-checks everything and always asks before installing.
