@@ -1,7 +1,10 @@
 // Shared helpers for every page. Everything an author wrote reaches the page through
 // textContent (el()), never innerHTML, and ids are re-validated here even though the gallery
 // build already checks them.
-import { RELEASES_URL, DOWNLOAD_URL, SETUP_URL, REPO_URL, STORE_URL, ANALYTICS_CODE } from "../config.js";
+import { RELEASES_URL, DOWNLOAD_URL, SETUP_URL, REPO_URL, STORE_URL, ANALYTICS_CODE, UPLOAD_URL } from "../config.js";
+
+// Where "publish" leads: the upload page while there is a Worker behind it, the guide otherwise.
+export const PUBLISH_URL = UPLOAD_URL ? "upload.html" : "develop.html#publish";
 
 export { RELEASES_URL, DOWNLOAD_URL, SETUP_URL, REPO_URL, STORE_URL };
 
@@ -109,6 +112,7 @@ export function nav(current) {
       el("a", { class: "brand", href: "./" }, "Desk Widgets"),
       link("explore.html", "Explore", "explore"),
       link("develop.html", "Develop", "develop"),
+      UPLOAD_URL ? link("upload.html", "Publish", "publish") : null,
       link("download.html", "Download", "download"),
       el("div", { class: "account" }), themeToggle())));
   document.body.append(footer());
@@ -135,7 +139,7 @@ function footer() {
       el("p", { class: "f-notice" },
         "Desk Widgets is free and open source. Community widgets are reviewed by a person before they appear here."),
       el("div", { class: "f-cols" },
-        column("Widgets", [["explore.html", "Explore"], ["./#catalog", "Built-in widgets"], ["develop.html#publish", "Publish yours"]]),
+        column("Widgets", [["explore.html", "Explore"], ["./#catalog", "Built-in widgets"], [PUBLISH_URL, "Publish yours"]]),
         column("App", [["download.html", "Download"], [STORE_URL, "Microsoft Store"],
           [RELEASES_URL, "What's new"], ["privacy.html", "Privacy"]]),
         column("Open source", [[REPO_URL, "Source code"], [REPO_URL + "/issues", "Report an issue"],
