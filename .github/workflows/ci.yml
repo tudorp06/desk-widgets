@@ -21,3 +21,15 @@ jobs:
         with:
           name: DeskWidgets
           path: bin/DeskWidgets.exe
+
+  worker:
+    name: Test the upload Worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Needs nothing installed: the tests drive the Worker against a pretend GitHub.
+      - run: node --test
+        working-directory: worker

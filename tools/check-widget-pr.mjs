@@ -13,13 +13,16 @@
 //
 // Run: node tools/check-widget-pr.mjs <main> <pull request head> [--extract <folder>]
 //   PR_AUTHOR        GitHub username of whoever opened the pull request
+//   PR_HEAD_REF      the pull request's branch, and PR_HEAD_REPO / PR_BASE_REPO the repositories
+//                    it comes from and goes to: together they recognise a pull request the
+//                    upload Worker opened for someone (pullRequestOwner in widget-rules.mjs)
 //   PR_ASSOCIATION   their relation to the repository (OWNER, MEMBER, COLLABORATOR, ...)
 
 import { execFileSync } from "child_process";
 import { mkdirSync, writeFileSync, appendFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { authorProblems, widgetProblems, parseJson, PART, WIDGET_FILES, AUTHOR_FILE } from "./widget-rules.mjs";
+import { authorProblems, widgetProblems, parseJson, PART, WIDGET_FILES, AUTHOR_FILE, pullRequestOwner } from "./widget-rules.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -31,7 +34,11 @@ if (!main || !head || (extractAt >= 0 && !extractTo)) {
   process.exit(2);
 }
 
-const login = (process.env.PR_AUTHOR || "").toLowerCase();
+const login = pullRequestOwner({
+  author: process.env.PR_AUTHOR, headRef: process.env.PR_HEAD_REF,
+  headRepo: process.env.PR_HEAD_REPO, baseRepo: process.env.PR_BASE_REPO,
+});
+const uploaded = login !== (process.env.PR_AUTHOR || "").toLowerCase();
 const maintainer = ["OWNER", "MEMBER", "COLLABORATOR"].includes(process.env.PR_ASSOCIATION || "");
 
 const git = (...a) => execFileSync("git", a, { cwd: root, maxBuffer: 64 * 1024 * 1024 });
@@ -126,7 +133,7 @@ if (extractTo) {
 
 const summary = problems.length
   ? `### This pull request needs changes before it can be reviewed\n\n${problems.map(p => `- ${p}`).join("\n")}\n`
-  : `### Widget checks passed\n\n${toCompile.length} widget(s) added or changed${maintainer ? " by a maintainer" : ` by @${process.env.PR_AUTHOR}, all in their own folder`}.\n`;
+  : `### Widget checks passed\n\n${toCompile.length} widget(s) added or changed${maintainer ? " by a maintainer" : ` by @${login}${uploaded ? " through the upload page" : ""}, all in their own folder`}.\n`;
 console.log(summary);
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
 process.exit(problems.length ? 1 : 0);

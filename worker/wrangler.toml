@@ -1,0 +1,23 @@
+# The upload Worker (see README.md in this folder). Deploy: npx wrangler deploy
+name = "desk-widgets-upload"
+main = "src/index.mjs"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[vars]
+# The repository the gallery lives in, and the branch a widget is merged into.
+REPO = "whoissaaif/desk-widgets"
+BASE_BRANCH = "main"
+# The published gallery: where an author whose folder is not their username is found.
+GALLERY_URL = "https://whoissaaif.github.io/desk-widgets/w/gallery.json"
+# Pages that may use this Worker, separated by commas. Sign-in returns to the one that asked,
+# and to the first when it is not on the list.
+UPLOAD_PAGES = "https://whoissaaif.github.io/desk-widgets/upload.html,http://localhost:8000/upload.html"
+# From the GitHub App's settings page. Neither is a secret.
+GITHUB_APP_ID = "5788720"
+GITHUB_CLIENT_ID = "Iv23lik2hnHBPb47Tc0j"
+
+# Secrets, set once with `npx wrangler secret put <NAME>` and never written here:
+#   GITHUB_CLIENT_SECRET   the app's client secret
+#   GITHUB_PRIVATE_KEY     the app's private key, the whole .pem file
+#   SESSION_SECRET         any long random text; signs the one-hour sign-in

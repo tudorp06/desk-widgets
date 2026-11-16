@@ -171,6 +171,17 @@ textarea.input.short { min-height: 88px; font: 400 17px/1.3 var(--font-text); le
 .byline { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .byline .t-reduced { margin: 0; }
 .input:focus { outline: none; border-color: var(--blue-fill); box-shadow: var(--focus); }
+/* a labelled field: 14/600 label over the control, a caption under it (the upload page) */
+.field { display: block; margin-top: 24px; }
+.field-label { display: block; font: 600 14px/20px var(--font-text); letter-spacing: -0.016em; margin: 0 0 6px; }
+.field-hint { display: block; margin-top: 6px; }
+.field .group .button { flex: none; }
+.row.over { background: var(--grey-fill); }   /* a file is being dragged over this row */
+.thumb { flex: none; width: 44px; height: 44px; border-radius: var(--r-small); object-fit: contain; background: var(--grey-fill); }
+.text-button { border: 0; padding: 0; background: none; color: var(--link); cursor: pointer; }
+.text-button:hover { text-decoration: underline; }
+.notice ul { margin: 6px 0 0; padding-left: 20px; }
+form + .notice, form .notice { margin-top: 24px; }
 
 /* ---- confirm dialog (Apple-style sheet: glass material, centered) ---- */
 .dialog-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .4);

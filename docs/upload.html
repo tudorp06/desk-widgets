@@ -4,18 +4,248 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Publish a Widget · Desk Widgets</title>
-  <meta name="robots" content="noindex">
-  <!-- This page is gone: widgets are now published by pull request, and the site has no
-       accounts. Older copies of the app and old links still open it, so it sends them to the
-       guide instead of a dead end. -->
-  <meta http-equiv="refresh" content="0; url=develop.html#publish">
+  <meta name="description" content="Send a widget you made to be reviewed for the Desk Widgets gallery.">
   <link rel="stylesheet" href="assets/site.css">
+  <link rel="modulepreload" href="assets/site.js">
+  <link rel="modulepreload" href="config.js">
 </head>
 <body>
+  <!-- The one page of the site with a sign-in. It talks to the upload Worker (worker/), which
+       learns the person's GitHub username and opens the pull request for them; the widget is
+       reviewed and merged like any other. With no Worker configured (UPLOAD_URL in config.js)
+       this page sends people to the pull request guide. -->
   <main class="content narrow section">
-    <h1 class="t-large">This page has moved</h1>
-    <p>Widgets are now published on GitHub, and this site no longer has accounts.
-    <a href="develop.html#publish">How to publish a widget</a></p>
+    <h1 class="t-large">Publish a Widget</h1>
+    <p class="t-reduced">Send a widget you made to be reviewed for the gallery.</p>
+    <div id="stage" aria-live="polite"></div>
+    <noscript><p>This page needs JavaScript. You can also
+      <a href="develop.html#publish">publish by pull request</a>.</p></noscript>
   </main>
+
+  <script type="module">
+    import { nav, el, notice, CATEGORIES } from "./assets/site.js";
+    import { UPLOAD_URL } from "./config.js";
+    import { getWidgets } from "./assets/data.js";
+
+    const GUIDE = "develop.html#publish";
+    if (!UPLOAD_URL) location.replace(GUIDE);
+    nav("develop");
+
+    const stage = document.getElementById("stage");
+    const show = (...nodes) => stage.replaceChildren(...nodes.flat().filter(Boolean));
+
+    // The sign-in lasts an hour and lives in this tab only. Storage can be blocked (site.js
+    // explains); then it lasts until the page is closed or reloaded.
+    const KEY = "dw-upload";
+    let session = null;
+    try { session = sessionStorage.getItem(KEY); } catch (e) { /* kept in memory instead */ }
+    function keep(token) {
+      session = token;
+      try { token ? sessionStorage.setItem(KEY, token) : sessionStorage.removeItem(KEY); } catch (e) { /* as above */ }
+    }
+
+    // Back from signing in: the Worker puts the result after the #, where no server sees it.
+    const came = new URLSearchParams(location.hash.slice(1));
+    if (came.has("session") || came.has("error")) {
+      if (came.get("session")) keep(came.get("session"));
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+
+    // The same rules the pull request check uses, published beside the gallery. Without them
+    // (a dev host where the gallery was never built) the Worker's own check still applies.
+    const rules = import("./w/widget-rules.mjs").catch(() => null);
+
+    async function ask(path, init = {}) {
+      const res = await fetch(UPLOAD_URL + path, { ...init, headers: { authorization: "Bearer " + session } });
+      let data = null;
+      try { data = await res.json(); } catch (e) { /* not JSON: treated as a failure below */ }
+      return { status: res.status, data: data || {} };
+    }
+
+    function signedOut(message) {
+      keep(null);
+      const here = location.origin + location.pathname;
+      show(
+        message ? notice(message, true) : null,
+        el("p", {}, "Sign in with GitHub so the gallery knows the widget is yours. GitHub tells this site your username and nothing else: it cannot see or change anything in your account."),
+        el("p", {}, "Your widget becomes a pull request on GitHub. It is checked automatically, read by a maintainer, and in the gallery a few minutes after it is merged."),
+        el("div", { class: "actions" },
+          el("a", { class: "button", href: UPLOAD_URL + "/login?return=" + encodeURIComponent(here) }, "Sign In with GitHub"),
+          el("a", { class: "more", href: GUIDE }, "Publish by pull request instead")));
+    }
+
+    async function start() {
+      if (!session) return signedOut(came.has("error") ? "Signing in did not finish. Try again." : null);
+      show(notice("Loading…"));
+      let me;
+      try { me = await ask("/me"); }
+      catch (e) {
+        return show(notice("The upload service could not be reached. Check your connection and try again.", true),
+          el("div", { class: "actions" }, el("button", { class: "button grey small", type: "button", onclick: start }, "Try Again")));
+      }
+      if (me.status === 401) return signedOut("Your sign-in ran out. Sign in again.");
+      if (me.status !== 200) return show(notice(me.data.error || "The upload service is not working right now. Try again in a minute.", true));
+      form(me.data);
+    }
+
+    const slugFrom = name => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 36);
+    const size = n => n < 1024 ? n + " bytes" : Math.round(n / 1024) + " KB";
+
+    async function form(me) {
+      const field = (label, control, hint) => el("label", { class: "field" },
+        el("span", { class: "field-label" }, label), control, hint ? el("span", { class: "t-caption field-hint" }, hint) : null);
+
+      // The newest API the gallery has seen is the safe choice: an older app then says
+      // "needs a newer Desk Widgets" instead of failing to compile the widget.
+      let newest = 1;
+      try { newest = Math.max(1, ...(await getWidgets()).map(w => Number(w.api_version) || 1)); } catch (e) { /* 1 */ }
+
+      const which = el("select", { class: "input" }, el("option", { value: "" }, "A new widget"),
+        me.widgets.map(w => el("option", { value: w.slug }, "Update " + w.name)));
+      const name = el("input", { class: "input", maxlength: 40, required: true, autocomplete: "off" });
+      const slug = el("input", { class: "input", maxlength: 36, required: true, autocomplete: "off", spellcheck: "false", autocapitalize: "none" });
+      const slugHint = el("span", { class: "t-caption field-hint" });
+      const category = el("select", { class: "input" }, CATEGORIES.map(([id, label]) => el("option", { value: id }, label)));
+      const description = el("input", { class: "input", maxlength: 120, autocomplete: "off" });
+      const api = el("select", { class: "input" }, Array.from({ length: newest }, (_, i) => el("option", { value: i + 1 }, String(i + 1))));
+      const bio = el("textarea", { class: "input bio", maxlength: 160, rows: 2 });
+      bio.value = me.bio || "";
+      category.value = "utility"; api.value = String(newest);
+
+      // A file row: what was chosen, and a button. The bytes are kept exactly as they are on
+      // disk, because the gallery identifies a widget's source by its hash.
+      const files = { code: null, preview: null };
+      function fileRow(key, title, accept, hintNew, hintKeep) {
+        const input = el("input", { type: "file", accept, hidden: true });
+        const status = el("div", { class: "t-reduced" });
+        const thumb = key === "preview" ? el("img", { class: "thumb", alt: "", hidden: true }) : null;
+        const paint = () => {
+          const f = files[key];
+          status.textContent = f ? f.name + " · " + size(f.size) : which.value ? hintKeep : hintNew;
+          if (!thumb) return;
+          if (thumb.src) URL.revokeObjectURL(thumb.src);
+          thumb.hidden = !f;
+          if (f) thumb.src = URL.createObjectURL(f); else thumb.removeAttribute("src");
+        };
+        const take = f => { if (f) { files[key] = f; paint(); check(); } };
+        input.addEventListener("change", () => { take(input.files[0]); input.value = ""; });
+        const row = el("div", { class: "row" }, thumb, el("div", { class: "main" }, el("div", { class: "t-headline" }, title), status),
+          el("button", { class: "button grey small", type: "button", onclick: () => input.click() }, "Choose…"), input);
+        row.addEventListener("dragover", e => { e.preventDefault(); row.classList.add("over"); });
+        row.addEventListener("dragleave", () => row.classList.remove("over"));
+        row.addEventListener("drop", e => { e.preventDefault(); row.classList.remove("over"); take(e.dataTransfer.files[0]); });
+        paint();
+        return { row, paint };
+      }
+      const codeRow = fileRow("code", "Source", ".cs",
+        "The .cs file you tested with Install from File.", "Leave empty to keep the source that is in the gallery.");
+      const previewRow = fileRow("preview", "Preview", "image/png,.png",
+        "A PNG under 100 KB. In the app, right-click your widget and choose Save Preview.", "Leave empty to keep the picture that is in the gallery.");
+
+      let slugTouched = false;
+      const paintSlug = () => { slugHint.textContent = "Its address in the gallery: u." + me.folder + "." + (slug.value || "…") + ". It cannot be changed later."; };
+      name.addEventListener("input", () => { if (!which.value && !slugTouched) { slug.value = slugFrom(name.value); paintSlug(); } });
+      slug.addEventListener("input", () => { slugTouched = true; paintSlug(); });
+      which.addEventListener("change", () => {
+        const w = me.widgets.find(x => x.slug === which.value);
+        slug.disabled = Boolean(w);
+        slugTouched = false;
+        name.value = w ? w.name : ""; slug.value = w ? w.slug : "";
+        description.value = w ? w.description || "" : "";
+        category.value = w ? w.category : "utility";
+        api.value = String(w ? Math.min(w.api_version, newest) : newest);
+        files.code = files.preview = null;
+        codeRow.paint(); previewRow.paint(); paintSlug(); check();
+      });
+      paintSlug();
+
+      // Problems are listed once Send has been pressed, and then kept current while they are fixed.
+      const problems = el("div", {});
+      let tried = false;
+      const list = found => problems.replaceChildren(...(found.length
+        ? [el("div", { class: "notice error", role: "alert" }, found.length === 1 ? "One thing to fix:" : "A few things to fix:",
+            el("ul", {}, found.map(p => el("li", {}, p.charAt(0).toUpperCase() + p.slice(1)))))] : []));
+      async function findProblems() {
+        const r = await rules, found = [], updating = Boolean(which.value);
+        const code = files.code ? new Uint8Array(await files.code.arrayBuffer()) : null;
+        const preview = files.preview ? new Uint8Array(await files.preview.arrayBuffer()) : null;
+        if (!code && !updating) found.push("choose the widget's source file");
+        if (!preview && !updating) found.push("add a preview picture: it is what people see in the gallery");
+        if (!r) return found;
+        const meta = { name: name.value.trim(), category: category.value, description: description.value.trim(), api_version: Number(api.value), version: 1 };
+        const stand = code || (updating ? new TextEncoder().encode("[DeskWidget]") : null);
+        for (const p of r.widgetProblems({ author: me.folder, slug: slug.value.trim(), meta, code: stand, preview }))
+          if (!p.startsWith("widget.cs is missing")) found.push(p.replace(/^meta\.json: /, "").replace(/^the widget folder must/, "the short name must"));
+        for (const p of r.authorProblems({ github: me.login, bio: bio.value.trim() })) found.push(p.replace(/^author\.json: /, ""));
+        return found;
+      }
+      async function check() { if (tried) list(await findProblems()); }
+      for (const input of [name, slug, description, bio]) input.addEventListener("input", check);
+
+      const send = el("button", { class: "button", type: "submit" }, "Send for Review");
+      const body = el("form", { novalidate: true },
+        me.widgets.length ? field("Widget", which) : null,
+        field("Name", name, "What people see in the gallery and in the app. Up to 40 characters."),
+        field("Short Name", slug, slugHint),
+        field("Category", category),
+        field("Description", description, "One line about what it shows. Up to 120 characters."),
+        field("Needs API Version", api, "Leave the newest unless you know your widget only uses older features."),
+        el("div", { class: "field" }, el("span", { class: "field-label" }, "Files"),
+          el("div", { class: "group" }, codeRow.row, previewRow.row),
+          el("span", { class: "t-caption field-hint" }, "Choose each file, or drop it on its row.")),
+        field("About You", bio, "One line shown on your profile. Up to 160 characters."),
+        problems,
+        el("div", { class: "actions" }, send, el("a", { class: "more", href: "develop.html#rules" }, "The rules a widget follows")));
+
+      body.addEventListener("submit", async e => {
+        e.preventDefault();
+        tried = true;
+        const found = await findProblems();
+        list(found);
+        if (found.length) return problems.scrollIntoView({ block: "center", behavior: "smooth" });
+        const data = new FormData();
+        for (const [k, v] of [["slug", slug.value.trim()], ["name", name.value], ["category", category.value],
+          ["description", description.value], ["api_version", api.value], ["bio", bio.value]]) data.set(k, v);
+        if (files.code) data.set("code", files.code, "widget.cs");
+        if (files.preview) data.set("preview", files.preview, "preview.png");
+        send.disabled = true; send.textContent = "Sending…";
+        let res = null;
+        try { res = await ask("/submit", { method: "POST", body: data }); } catch (err) { /* reported below */ }
+        send.disabled = false; send.textContent = "Send for Review";
+        if (!res) return list(["the upload service could not be reached. Nothing was sent; check your connection and try again"]);
+        if (res.status === 401) return signedOut("Your sign-in ran out before the widget was sent. Sign in and send it again.");
+        if (res.status !== 200) return list(Array.isArray(res.data.problems) ? res.data.problems : [res.data.error || "the upload did not go through. Try again in a minute"]);
+        sent(res.data, name.value.trim());
+      });
+
+      show(
+        el("div", { class: "byline" }, el("span", { class: "t-reduced" }, "Signed in as ", el("strong", {}, me.login), " · "),
+          el("button", { class: "text-button t-reduced", type: "button", onclick: () => signedOut(null) }, "Sign Out")),
+        me.open.length ? [el("h2", { class: "field-label", style: "margin-top:32px" }, "Waiting for Review"),
+          el("div", { class: "group", role: "list" }, me.open.map(o => el("div", { class: "row", role: "listitem" },
+            el("div", { class: "main" }, el("div", { class: "t-headline" }, o.slug),
+              el("div", { class: "t-reduced" }, "Send this widget again to change what is waiting.")),
+            pullRequestLink(o.url, "View", "more"))))] : null,
+        body);
+    }
+
+    // A link is only ever made to a pull request on GitHub, whatever the answer held.
+    const pullRequestLink = (url, text, cls) => /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(String(url))
+      ? el("a", { class: cls, href: url, rel: "noreferrer" }, text) : null;
+
+    function sent(result, name) {
+      show(
+        el("h2", { class: "block" }, result.updated ? "Updated" : "Sent for Review"),
+        el("p", {}, result.updated
+          ? name + " was already waiting for review, and the pull request now holds what you just sent."
+          : name + " is now a pull request on GitHub. It is checked automatically, then a maintainer reads the code."),
+        el("p", {}, "Questions and the result reach you through GitHub’s notifications. Once it is merged, the widget is in the gallery a few minutes later."),
+        el("div", { class: "actions" }, pullRequestLink(result.url, "View on GitHub", "button"),
+          el("button", { class: "button grey", type: "button", onclick: start }, "Publish Another")));
+      scrollTo({ top: 0 });
+    }
+
+    if (UPLOAD_URL) start();
+  </script>
 </body>
 </html>

@@ -16,6 +16,7 @@
 //   docs/w/<id>/preview.png
 //   docs/w/<id>/index.html       the widget's own shareable page
 //   docs/w/avatars/<author>.*    each author's GitHub picture, so the site never asks GitHub
+//   docs/w/widget-rules.mjs      a copy of tools/widget-rules.mjs, for the upload page
 //
 // Why a page per widget: docs/widget.html is a single file that reads ?id= in the browser, so
 // every widget link unfurls with the same title and the same picture. Crawlers do not run the
@@ -170,6 +171,10 @@ async function picture(login) {
     return type && bytes.length <= 1024 * 1024 ? { ext: type[0], bytes } : null;
   } catch (e) { return null; }
 }
+// The rules themselves, so the upload page (docs/upload.html) checks a widget in the browser
+// with the same file the pull request check uses.
+await copyFile(join(here, "widget-rules.mjs"), join(outRoot, "widget-rules.mjs"));
+
 await mkdir(join(outRoot, "avatars"), { recursive: true });
 await Promise.all(authors.map(async a => {
   const found = a.github ? await picture(a.github) : null;

@@ -13,3 +13,8 @@ export const STORE_URL = "https://apps.microsoft.com/detail/9PML42WDP84Z";
 // deskwidgets.goatcounter.com. Empty means no analytics script is loaded at all, which is the
 // state the privacy page describes when this is blank. Sign up at https://www.goatcounter.com.
 export const ANALYTICS_CODE = "deskwidgets";
+
+// The upload Worker (worker/): what lets upload.html open a pull request for someone who signs
+// in with GitHub. No trailing slash. Empty means there is no Worker, and the upload page sends
+// people to the pull request guide instead.
+export const UPLOAD_URL = "https://desk-widgets-upload.saifab642.workers.dev";
