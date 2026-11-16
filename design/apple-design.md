@@ -804,11 +804,19 @@ The Settings page opens from the gear icon at the bottom of the sidebar (below t
   URL protocol, settings and caches, and exits.
 
 ### 17.9 Publishing
-There are no accounts, in the app or on the website. A widget is published by pull request on
-GitHub, and the app's part is to point there: "Publish a Widget ↗" on Explore and "Publish to
+There are no accounts to create, in the app or on the website. A widget is published by pull
+request on GitHub, and the app's part is to point there: "Publish a Widget ↗" on Explore and "Publish to
 the Gallery ↗" in the menu of a widget installed from a file both open the publishing guide
 (`develop.html#publish`). "Save Preview" in that menu writes the `preview.png` the guide asks
 for. The ↗ marks anything that leaves the app for the browser.
+
+The website's upload page (`docs/upload.html`) opens that pull request for someone who signs in
+with GitHub. It is one 640 px form column (§8.7): a 14/600 label over each field with a caption
+under it, the two files as rows of a grouped list with a Grey "Choose…" at the right (a row also
+takes a dropped file, and the preview shows as a 44 px thumbnail), then one Filled button, "Send
+for Review". Signed out, the page is two sentences and one Filled "Sign In with GitHub".
+Problems appear as one list above the button, only after Send is pressed, and stay current while
+they are fixed. Sign-in is on that page alone and never in the nav.
 
 On the website the right end of the nav holds only the light and dark switch. An author's
 picture is a round photo (their GitHub picture), or the first letter of their name on grey when

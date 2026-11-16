@@ -12,7 +12,10 @@ export const MAX_SOURCE = 524288, MAX_PREVIEW = 105000, MAX_BIO = 160;
 export const WIDGET_FILES = ["widget.cs", "meta.json", "preview.png"];
 export const AUTHOR_FILE = "author.json";
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+// Nothing here is specific to Node: the upload Worker (worker/) and the upload page run the same
+// file, so bytes are any Uint8Array (a Node Buffer is one) and only web-standard calls are used.
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const isPng = bytes => bytes.length >= 8 && PNG_SIGNATURE.every((b, i) => bytes[i] === b);
 const wholeNumber = n => Number.isInteger(n) && n >= 1;
 
 // Characters that make code look different from what the C# compiler sees ("Trojan Source",
@@ -37,6 +40,25 @@ export function parseJson(text) {
     const value = JSON.parse(text);
     return value && typeof value === "object" && !Array.isArray(value) ? value : null;
   } catch (e) { return null; }
+}
+
+// A pull request the upload Worker opens comes from this branch, in this repository:
+// upload/<GitHub username in lower case>/<widget folder>. The Worker has checked who signed in,
+// so the pull request check takes the author from the branch (tools/check-widget-pr.mjs).
+export const UPLOAD_BRANCH = /^upload\/([a-z0-9-]{1,39})\/([a-z0-9-]{1,36})$/;
+// The account the Worker's GitHub App opens pull requests as: "<the app's slug>[bot]". Empty
+// until the app is registered, which leaves upload pull requests unrecognised.
+export const UPLOAD_BOT = "desk-widgets-upload[bot]";
+
+// Whose pull request this is, in lower case: the account that opened it, or, when the upload
+// Worker opened it, the person who signed in there. Only the app can open a pull request as its
+// bot, and only someone with write access can make a branch in this repository, so a stranger
+// cannot produce a pull request that passes both tests.
+export function pullRequestOwner({ author, headRef, headRepo, baseRepo, bot = UPLOAD_BOT }) {
+  const login = String(author || "").toLowerCase();
+  if (!bot || login !== bot.toLowerCase()) return login;
+  const m = headRepo && headRepo === baseRepo ? UPLOAD_BRANCH.exec(String(headRef || "")) : null;
+  return m ? m[1] : "";
 }
 
 // Everything wrong with an author.json, as sentences. Empty means it is fine.
@@ -86,7 +108,7 @@ export function widgetProblems({ author, slug, meta, code, preview }) {
     }
   }
 
-  if (preview && !preview.subarray(0, 8).equals(PNG_SIGNATURE)) problems.push("preview.png is not a PNG");
+  if (preview && !isPng(preview)) problems.push("preview.png is not a PNG");
   else if (preview && preview.length > MAX_PREVIEW) problems.push(`preview.png is larger than ${Math.floor(MAX_PREVIEW / 1000)} KB`);
   return problems;
 }

@@ -125,11 +125,13 @@ widget shows instantly at startup and keeps working offline.
   version is out, and **Install from File…** for a `.cs` you wrote yourself (see
   `samples/HelloWidget.cs`).
 - **Publishing your own**: the gallery is the [`widgets/`](widgets) folder of this repository.
-  Open a pull request that adds your widget to `widgets/<your GitHub username>/`; it is checked
-  automatically, read by a maintainer, and in the gallery a few minutes after it is merged. The
+  A pull request adds your widget to `widgets/<your GitHub username>/`; it is checked
+  automatically, read by a maintainer, and in the gallery a few minutes after it is merged.
+  The [upload page](https://whoissaaif.github.io/desk-widgets/upload.html) opens that pull
+  request for you after you sign in with GitHub, or you can open it yourself; the
   [publishing guide](https://whoissaaif.github.io/desk-widgets/develop.html#publish) has the
   details. Right-click a widget you installed from a file › Save Preview writes the
-  `preview.png` it asks for. There are no accounts, in the app or on the website.
+  `preview.png` it asks for. There are no accounts to create, in the app or on the website.
 
 ## Settings & portability
 

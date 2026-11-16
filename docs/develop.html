@@ -249,8 +249,18 @@ public sealed class GreetingWidget : CardWidget
 
     <p>The gallery is a folder in the app's
     <a href="https://github.com/whoissaaif/desk-widgets/tree/main/widgets">GitHub repository</a>.
-    You publish by opening a pull request that adds your widget to it, and it appears in the
-    gallery once a maintainer has read it and merged it.</p>
+    A widget is added to it by pull request, and it appears in the gallery once a maintainer has
+    read it and merged it. There are two ways to open that pull request.</p>
+
+    <h3 class="t-headline" style="margin-top:24px">With the upload page</h3>
+    <p>The quick way, with no git involved. <a href="upload.html">Publish a Widget</a> asks you
+    to sign in with GitHub, so the gallery knows the widget is yours, then takes your
+    <code>.cs</code> file, a preview picture and a few words about it, and opens the pull request
+    for you. Updating a widget later works the same way, and the version number is kept for
+    you.</p>
+
+    <h3 class="t-headline" style="margin-top:32px">By hand</h3>
+    <p>If you would rather use git yourself:</p>
 
     <div class="group" role="list">
       <div class="row"><div class="main"><div class="t-headline">1. Fork the repository</div>
@@ -294,7 +304,7 @@ widgets/you/greeting/meta.json
     <p class="t-reduced">Categories: clocks, productivity, weather, system, media, developer,
     sports, finance, news, utility, social, health, travel, games.</p>
 
-    <h2 class="block">Rules</h2>
+    <h2 class="block" id="rules">Rules</h2>
 
     <div class="group" role="list">
       <div class="row"><div class="main"><div class="t-headline">One file, C# 5</div>

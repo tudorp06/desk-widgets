@@ -149,10 +149,11 @@ The source's SHA-256 must match the reviewed hash from the gallery.
 
 Static site served by GitHub Pages from `main`. `docs/assets/site.js` has the shared JS;
 individual pages (explore, widget, profile, develop, etc.) are self-contained HTML. The site
-has no accounts and no database: `docs/assets/data.js` reads `docs/w/gallery.json` and the files
-beside it. `upload.html`, `account.html`, `admin.html`, `login.html` and `password.html` are
+has no accounts to create and no database: `docs/assets/data.js` reads `docs/w/gallery.json`
+and the files beside it. `account.html`, `admin.html`, `login.html` and `password.html` are
 redirects to the publishing guide (`develop.html#publish`), kept because older copies of the
-app and old links still open them.
+app and old links still open them. `upload.html` is the upload page (below), and behaves like
+those redirects while `UPLOAD_URL` in `docs/config.js` is empty.
 
 The gallery is in the repository, not in a database. Every community widget lives in
 `widgets/<author>/<slug>/` (`widget.cs`, `preview.png`, `meta.json`; one `author.json` per
@@ -172,8 +173,30 @@ changes, and the widget compiles against the app built from `main`. That workflo
 `pull_request_target` and treats the pull request as data; never add a step to it that checks
 out or runs a file from the pull request.
 
+### Upload Worker (`worker/`)
+
+The one server in the project: a Cloudflare Worker that lets someone publish from
+`docs/upload.html` instead of making the pull request by hand. It signs them in with GitHub to
+learn their username, then, as a GitHub App installed on this repository, commits their files
+to `upload/<username>/<widget>` and opens the pull request. It has no database, never acts as
+the person, and can only propose: its pull requests get the same checks and the same review.
+`worker/README.md` has the setup; `tools/widget-rules.mjs` is shared by the Worker, the upload
+page (copied to `docs/w/` by the gallery build) and the pull request check, so it must stay
+free of Node-only calls.
+
+```
+cd worker && node --test          # the Worker's tests; nothing to install
+node worker/dev/server.mjs        # the real Worker code against a pretend GitHub, for trying upload.html locally
+```
+
+The pull request check takes the author from the branch name only when the app's bot
+(`UPLOAD_BOT` in `tools/widget-rules.mjs`) opened the pull request from a branch in this
+repository (`pullRequestOwner`). Do not loosen either half of that test: the bot's name alone
+can be imitated by another app, and the branch name alone by anyone with a fork.
+
 The app reads the same files (`src/Community.cs`). It has no account and sends nothing about
-what was installed, so there are no likes or install counts. There is no server and no database.
+what was installed, so there are no likes or install counts. The Worker is the only server, and
+the gallery does not depend on it: with it down, publishing by pull request works as before.
 Copies of the app older than 1.9 read a Supabase project that is no longer part of this
 repository; they lose Explore when it is deleted, and nothing here can change that.
 
