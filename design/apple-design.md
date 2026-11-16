@@ -816,7 +816,9 @@ under it, the two files as rows of a grouped list with a Grey "Choose…" at the
 takes a dropped file, and the preview shows as a 44 px thumbnail), then one Filled button, "Send
 for Review". Signed out, the page is two sentences and one Filled "Sign In with GitHub".
 Problems appear as one list above the button, only after Send is pressed, and stay current while
-they are fixed. Sign-in is on that page alone and never in the nav.
+they are fixed. Sign-in is on that page alone and never in the nav. The nav links to the page as
+"Publish", between Develop and Download, and the footer's "Publish yours" goes there too; with
+no upload Worker configured the nav link is absent and the footer leads to the guide.
 
 On the website the right end of the nav holds only the light and dark switch. An author's
 picture is a round photo (their GitHub picture), or the first letter of their name on grey when
