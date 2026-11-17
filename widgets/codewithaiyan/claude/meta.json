@@ -1,0 +1,7 @@
+{
+  "name": "Claude",
+  "category": "productivity",
+  "description": "Claude in an expandable Brave or Edge app window, with a compact desktop card and collapse control.",
+  "api_version": 3,
+  "version": 1
+}
