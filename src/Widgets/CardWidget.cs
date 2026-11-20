@@ -404,6 +404,10 @@ namespace DeskWidgets.Widgets
 
         protected virtual void BuildWidgetMenu(PopupMenu menu) { }
 
+        // The group menu in arrange mode set "face", "scale" or "opacity" on us: drop the caches
+        // that depend on them, exactly as picking the item on this widget alone would.
+        internal override void SettingsChangedExternally() { Changed(); }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)

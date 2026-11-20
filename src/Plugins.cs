@@ -109,6 +109,33 @@ namespace DeskWidgets
 
         // ---- startup ----
 
+        // True when every installed widget already has a compiled build for this exact exe, so
+        // loading them is only reading bytes off disk -- no csc.exe, nothing for an antivirus to
+        // watch, and nothing worth waiting out at startup. False after an app update (the build
+        // key carries the exe's hash, so every widget recompiles once) or a fresh install.
+        public static bool AllCached()
+        {
+            try
+            {
+                if (!Directory.Exists(Root)) return true;
+                string suffix = " " + ExeHash();
+                foreach (string dir in Directory.GetDirectories(Root))
+                {
+                    if (!File.Exists(Path.Combine(dir, "plugin.ini"))) continue;
+                    PluginInfo p;
+                    try { p = PluginInfo.Load(dir); }
+                    catch (Exception) { return false; }
+                    if (p.Disabled != null) continue;
+                    if (!File.Exists(Path.Combine(p.VersionDir, "widget.dll"))) return false;
+                    string key = Path.Combine(p.VersionDir, "build.key");
+                    if (!File.Exists(key)) return false;
+                    if (!File.ReadAllText(key).EndsWith(suffix, StringComparison.Ordinal)) return false;
+                }
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+
         public static void LoadAll()
         {
             AppDomain.CurrentDomain.AssemblyResolve += ResolveHost;
