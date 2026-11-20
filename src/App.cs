@@ -127,9 +127,13 @@ namespace DeskWidgets
             DataDir = Path.GetDirectoryName(configPath);
             config = Config.Load(configPath);
             OpenAll();
-            // Community plugins load after a short delay so the compile-and-execute
-            // pattern doesn't fire during the window where antivirus behavioral
-            // monitoring is most aggressive. Built-in widgets are already on screen.
+            // Community widgets wait only when one of them has to be compiled: that is the
+            // compile-and-execute pattern, and it is worth keeping out of the window right after
+            // sign-in where antivirus behavioral monitoring is most aggressive. Once a widget has
+            // a cached build for this exe -- which is every start but the first after an update --
+            // loading it is just reading a DLL off disk, so there is nothing to wait for and the
+            // desktop fills immediately instead of five seconds late.
+            int widgetDelay = Plugins.AllCached() ? 1 : 5000;
             Ui.Later(delegate
             {
                 Plugins.LoadAll();
@@ -137,7 +141,7 @@ namespace DeskWidgets
                     if (p.Type != null) OpenType(p.Id);
                 NotifyOrphanedWidgets();
                 WidgetRegistry.RaiseChanged();
-            }, 5000);
+            }, widgetDelay);
 
             tray = new NotifyIcon { Icon = LoadIcon(SystemInformation.SmallIconSize), Text = AppName, Visible = true };
             tray.MouseClick += delegate(object s, MouseEventArgs e)
@@ -176,6 +180,12 @@ namespace DeskWidgets
 
             // Check for a newer release of the app itself (once, 15 s after start).
             Ui.Later(AppUpdater.CheckInBackground, 15000);
+
+            // Long after everything is on screen: the logon task is written once and then lives in
+            // Task Scheduler, so a fix to it only reaches people who already have one if we rewrite
+            // it. Deferred because asking schtasks.exe anything costs a process launch, and this is
+            // the one thing here that must not slow the start it exists to speed up.
+            Ui.Later(UpgradeScheduledTask, 20000);
         }
 
         // Runs on the UI thread (from a background thread, or later when already on it).
@@ -273,6 +283,63 @@ namespace DeskWidgets
             return widgets.Count(w => w.Settings.Type == typeId);
         }
 
+        // ---- profiles (src/Profiles.cs owns the rules; the config lives here) ----
+
+        internal Config Store { get { return config; } }
+
+        internal string ActiveProfileName
+        {
+            get { return AppSection.Get("profile", Profiles.DefaultName); }
+            set { AppSection.Set("profile", value); }
+        }
+
+        internal string ProfileList
+        {
+            get { return AppSection.Get("profiles", ""); }
+            set { AppSection.Set("profiles", value); }
+        }
+
+        // Puts this profile's widgets on the desktop and takes the last one's off. Settings and
+        // positions stay in the config either way, so switching back finds everything in place.
+        internal void SwitchProfile(string name)
+        {
+            if (name == null || name.Length == 0) return;
+            Arrange.Exit();
+            foreach (var w in widgets) w.Dispose();
+            widgets.Clear();
+            ActiveProfileName = name;
+            OpenAll();
+            foreach (var w in widgets.ToArray()) w.AnimateAppear();
+            RaiseWidgetsChanged();
+        }
+
+        // A profile was renamed: the same widgets are on screen, but the library's lists aren't.
+        internal void RefreshAfterProfileChange()
+        {
+            RaiseWidgetsChanged();
+        }
+
+        // Every widget currently on screen, as a snapshot: arrange mode and Tidy Up walk this
+        // while removing from it. Internal, so it adds nothing to the plugin API.
+        internal IList<WidgetWindow> OpenWidgets { get { return widgets.ToArray(); } }
+
+        // Removes a whole selection behind one confirmation.
+        internal void RemoveWidgets(IEnumerable<WidgetWindow> set)
+        {
+            var doomed = set.Where(w => w != null && !w.IsDisposed).Distinct().ToList();
+            if (doomed.Count == 0) return;
+            if (doomed.Count == 1) { RemoveWidget(doomed[0]); return; }
+            if (!AlertDialog.Confirm("Remove " + doomed.Count + " Widgets?",
+                "These widgets and their settings will be removed.", "Remove")) return;
+            foreach (var w in doomed)
+            {
+                widgets.Remove(w);
+                config.Remove(w.Settings);
+                w.AnimateRemove();
+            }
+            RaiseWidgetsChanged();
+        }
+
         void RaiseWidgetsChanged()
         {
             if (WidgetsChanged != null) WidgetsChanged();
@@ -280,12 +347,13 @@ namespace DeskWidgets
 
         void OpenAll()
         {
-            foreach (var section in config.Sections.ToArray()) Open(section);
+            foreach (var section in config.Sections.ToArray())
+                if (Profiles.Belongs(section)) Open(section);
         }
 
         void NotifyOrphanedWidgets()
         {
-            var orphaned = config.Sections.Where(s => WidgetRegistry.IsOrphaned(s.Type)).ToList();
+            var orphaned = config.Sections.Where(s => Profiles.Belongs(s) && WidgetRegistry.IsOrphaned(s.Type)).ToList();
             if (orphaned.Count == 0) return;
             var names = orphaned.Select(s => s.Type).Distinct()
                 .Select(t => System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(t.Replace('-', ' ')))
@@ -333,7 +401,7 @@ namespace DeskWidgets
         // Opens every saved widget of a type that isn't on screen yet.
         public void OpenType(string typeId)
         {
-            foreach (var section in config.Sections.Where(s => s.Type == typeId).ToArray())
+            foreach (var section in config.Sections.Where(s => s.Type == typeId && Profiles.Belongs(s)).ToArray())
                 if (!widgets.Any(w => w.Settings == section)) Open(section);
             RaiseWidgetsChanged();
         }
@@ -348,6 +416,7 @@ namespace DeskWidgets
         // Explorer restarted: our windows were owned by the old desktop window, so rebuild them.
         void ReopenAll()
         {
+            Arrange.Exit(); // it holds references to the windows we're about to throw away
             foreach (var w in widgets) w.Dispose();
             widgets.Clear();
             OpenAll();
@@ -359,6 +428,7 @@ namespace DeskWidgets
         {
             if (WidgetRegistry.Find(type.Id) != type) return; // turned off or uninstalled meanwhile
             var section = config.Add(type.Id);
+            section.Set("profile", Profiles.Active);
             if (type.Defaults != null) type.Defaults(section);
             var w = Plugins.Guard(type, () => type.Create(section));
             if (w == null) { config.Remove(section); return; }
@@ -378,6 +448,9 @@ namespace DeskWidgets
             while (config.Sections.Exists(x => x.Name == "widget" + n)) n++;
             var section = new Section("widget" + n);
             foreach (var kv in s.Values) section.Values[kv.Key] = kv.Value;
+            // A backup keeps each widget's profile; one made before profiles existed joins the
+            // profile that's active now.
+            if (!section.Values.ContainsKey("profile")) section.Values["profile"] = Profiles.Active;
             config.Sections.Add(section);
             section.Owner = config;
             config.Save();
@@ -386,7 +459,7 @@ namespace DeskWidgets
         public void OpenMerged()
         {
             foreach (var section in config.Sections.ToArray())
-                if (!widgets.Any(w => w.Settings == section)) Open(section);
+                if (Profiles.Belongs(section) && !widgets.Any(w => w.Settings == section)) Open(section);
             RaiseWidgetsChanged();
         }
 
@@ -406,6 +479,23 @@ namespace DeskWidgets
             menu.AddCheck("Start with Windows", StartWithWindows, delegate { StartWithWindows = !StartWithWindows; });
             menu.Add("Settings…", delegate { OpenLibrary(); if (library != null) library.OpenSettings(); });
             menu.AddSeparator();
+            if (widgets.Count > 0)
+            {
+                menu.Add("Arrange Widgets…", delegate { Arrange.Enter(); });
+                menu.Add("Tidy Up", delegate { WidgetLayout.TidyAll(false); });
+                menu.Add("Shuffle", delegate { WidgetLayout.TidyAll(true); });
+            }
+            var names = Profiles.Names;
+            if (names.Count > 1)
+            {
+                var profile = menu.AddSubmenu("Profile");
+                foreach (string name in names)
+                {
+                    string n = name;
+                    profile.AddChoice(n, n == Profiles.Active, delegate { SwitchProfile(n); });
+                }
+            }
+            if (widgets.Count > 0 || names.Count > 1) menu.AddSeparator();
             menu.Add("Export Backup…", Backup.Export);
             menu.Add("Restore from Backup…", Backup.Import);
             menu.AddSeparator();
@@ -500,7 +590,11 @@ namespace DeskWidgets
             }
         }
 
-        static void SetAutostart(bool enabled, bool highPriority)
+        // 'interactive': the user just flipped a switch, so it's a fair moment to ask Windows for
+        // permission and to report what happened. False when this runs by itself at startup.
+        static void SetAutostart(bool enabled, bool highPriority) { SetAutostart(enabled, highPriority, true); }
+
+        static void SetAutostart(bool enabled, bool highPriority, bool interactive)
         {
             if (!enabled)
             {
@@ -511,11 +605,21 @@ namespace DeskWidgets
 
             if (highPriority)
             {
-                if (Current != null) Current.CreateScheduledTask();
+                if (Current != null) Current.CreateScheduledTask(interactive);
                 if (HasScheduledTask())
+                {
                     ClearRunKey();
+                }
                 else
+                {
+                    // No task: Windows will start us from the Run key instead, which the shell
+                    // holds back for several seconds on purpose. Say so rather than leave the
+                    // switch looking like it did something.
                     WriteRunKey();
+                    if (interactive)
+                        Toast.Show("Starting the Normal Way",
+                            "Without permission for a sign-in task, Windows holds Desk Widgets back a few seconds after you sign in.");
+                }
             }
             else
             {
@@ -606,12 +710,15 @@ namespace DeskWidgets
         {
             if (e.Reason != SessionSwitchReason.SessionLock && e.Reason != SessionSwitchReason.SessionUnlock) return;
             bool locked = e.Reason == SessionSwitchReason.SessionLock;
+            if (locked) Arrange.Exit();
             foreach (var w in widgets.ToArray()) w.SetPaused(locked);
         }
 
         // Resolution/monitor changed: re-apply each widget's relative position.
         void OnDisplaySettingsChanged(object sender, EventArgs e)
         {
+            // The overlay is sized to the old desktop and the grid to the old screens.
+            Arrange.Exit();
             DesktopBackdrop.Invalidate();
             foreach (var w in widgets.ToArray()) { w.Reposition(); w.BackdropChanged(); }
         }
@@ -693,8 +800,10 @@ namespace DeskWidgets
             }
         }
 
-        // High Priority: uses Task Scheduler (priority 4 = Above Normal) instead of the Run registry
-        // so the app starts earlier and faster at logon, and raises the process priority while running.
+        // High Priority: a Task Scheduler logon task (above-normal priority, no delay) instead of the
+        // Run registry key, so the app starts alongside the shell rather than after it, and raises the
+        // process priority while running. Adding a logon task needs permission once; without it,
+        // Windows starts us from the Run key several seconds into the session instead.
         const string TaskName = "DeskWidgets";
 
         public bool PixelShift
@@ -706,6 +815,24 @@ namespace DeskWidgets
                 if (value) pixelShiftTimer.Start();
                 else { pixelShiftTimer.Stop(); WidgetWindow.ResetPixelShift(); foreach (var w in widgets.ToArray()) w.Reposition(); }
             }
+        }
+
+        // How the widgets were last arranged ("Block3:TopRight"), so Shuffle can pick a different
+        // arrangement rather than dealing the same one again.
+        internal string LastArrangement
+        {
+            get { return AppSection.Get("arrange_last", ""); }
+            set { AppSection.Set("arrange_last", value); }
+        }
+
+        // Odds and ends that belong in [app] but don't deserve a property each (the widget area
+        // of every monitor). A null value removes the key.
+        internal string GetAppSetting(string key, string def) { return AppSection.Get(key, def); }
+
+        internal void SetAppSetting(string key, string value)
+        {
+            if (value == null) AppSection.Remove(key);
+            else AppSection.Set(key, value);
         }
 
         // The library's sidebar narrowed to its icons. Remembered, like the window's other choices.
@@ -744,7 +871,22 @@ namespace DeskWidgets
                 SetAutostart(true, HighPriority);
         }
 
-        void CreateScheduledTask()
+        // Bumped whenever the task XML changes, so an existing task is rewritten once.
+        const int TaskRevision = 2;
+
+        void UpgradeScheduledTask()
+        {
+            if (IsPackaged) return;
+            if (AppSection.GetInt("task_rev", 1) >= TaskRevision) return;
+            try
+            {
+                if (HighPriority && HasScheduledTask()) CreateScheduledTask(false);
+                AppSection.Set("task_rev", TaskRevision);
+            }
+            catch (Exception) { }
+        }
+
+        void CreateScheduledTask(bool allowPrompt)
         {
             try
             {
@@ -752,16 +894,31 @@ namespace DeskWidgets
                 string xml =
                     "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n" +
                     "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n" +
+                    // No <Delay>: the whole point of the task is to be on screen before the shell
+                    // has finished bringing everything else up. Starting before Explorer is safe --
+                    // widgets that find no Progman to own them are rebuilt when it broadcasts
+                    // TaskbarCreated (MessageWindow below).
                     "  <Triggers>\r\n" +
-                    "    <LogonTrigger><Enabled>true</Enabled><Delay>PT5S</Delay></LogonTrigger>\r\n" +
+                    "    <LogonTrigger><Enabled>true</Enabled></LogonTrigger>\r\n" +
                     "  </Triggers>\r\n" +
                     "  <Principals>\r\n" +
                     "    <Principal><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal>\r\n" +
                     "  </Principals>\r\n" +
+                    // Task Scheduler's <Priority> is not a process priority class: 0 is realtime,
+                    // 1 high, 2-3 above normal, 4-6 normal. This asked for 4 and got plain Normal
+                    // with normal I/O priority -- which, at sign-in, is a queue behind every other
+                    // startup app. 2 is the above-normal the setting actually promises, and it
+                    // raises the I/O and memory priority of the launch too, which is what makes
+                    // the difference while the disk is busy.
                     "  <Settings>\r\n" +
-                    "    <Priority>4</Priority>\r\n" +
+                    "    <Priority>2</Priority>\r\n" +
                     "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n" +
                     "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\r\n" +
+                    "    <RunOnlyIfIdle>false</RunOnlyIfIdle>\r\n" +
+                    "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>\r\n" +
+                    "    <StartWhenAvailable>true</StartWhenAvailable>\r\n" +
+                    "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n" +
+                    "    <IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings>\r\n" +
                     "    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\r\n" +
                     "  </Settings>\r\n" +
                     "  <Actions>\r\n" +
@@ -774,18 +931,41 @@ namespace DeskWidgets
                     "</Task>";
                 string tmp = Path.Combine(Path.GetTempPath(), "DeskWidgets_task.xml");
                 File.WriteAllText(tmp, xml, System.Text.Encoding.Unicode);
-                var psi = new System.Diagnostics.ProcessStartInfo("schtasks.exe",
-                    "/create /tn \"" + TaskName + "\" /xml \"" + tmp + "\" /f")
-                {
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
-                };
-                using (var p = System.Diagnostics.Process.Start(psi))
-                    p.WaitForExit(5000);
+                string args = "/create /tn \"" + TaskName + "\" /xml \"" + tmp + "\" /f";
+
+                // Windows only lets an administrator add a task that runs at sign-in, so this
+                // fails for an ordinary account. It used to fail silently and fall back to the
+                // Run key, which is exactly the slow start the setting is meant to avoid -- so
+                // ask for permission once, and only when the user asked for this.
+                if (!RunSchtasks(args, false) && allowPrompt && AlertDialog.Confirm("Start Earlier at Sign-in?",
+                        "Only an administrator can add a sign-in task. Without one, Windows holds Desk Widgets "
+                        + "back for several seconds after you sign in.", "Continue"))
+                    RunSchtasks(args, true);
+
                 try { File.Delete(tmp); } catch (Exception) { }
             }
             catch (Exception) { }
+        }
+
+        static bool RunSchtasks(string args, bool elevated)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo("schtasks.exe", args)
+                {
+                    CreateNoWindow = true,
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                };
+                if (elevated) { psi.UseShellExecute = true; psi.Verb = "runas"; }
+                else psi.UseShellExecute = false;
+                using (var p = System.Diagnostics.Process.Start(psi))
+                {
+                    // Elevated means a consent prompt the user has to answer first.
+                    p.WaitForExit(elevated ? 120000 : 10000);
+                    return p.HasExited && p.ExitCode == 0;
+                }
+            }
+            catch (Exception) { return false; } // including the user dismissing the prompt
         }
 
         void DeleteScheduledTask()

@@ -57,6 +57,7 @@ namespace DeskWidgets
             var menu = new PopupMenu();
             BuildMenu(menu);
             menu.AddSeparator();
+            menu.Add("Select Widgets…", delegate { Arrange.Enter(this); });
             menu.AddCheck("Lock Position", Locked, delegate { Settings.Set("locked", !Locked); FlashLock(); });
             var opacity = menu.AddSubmenu("Opacity");
             foreach (int pct in new[] { 100, 85, 70, 50 })
@@ -75,6 +76,15 @@ namespace DeskWidgets
 
         protected bool Locked { get { return Settings.GetBool("locked", false); } }
         int OpacityPercent { get { return Math.Max(10, Math.Min(100, Settings.GetInt("opacity", 100))); } }
+
+        // For arrange mode, which works on several widgets at once. Internal on purpose: community
+        // widgets neither see nor override these, so PluginApi.Version stays where it is.
+        internal bool IsLocked { get { return Locked; } }
+
+        // Something outside the widget changed its settings (the group menu set the appearance for
+        // a whole selection). Subclasses that cache anything derived from settings override this;
+        // CardWidget routes it to its own Changed().
+        internal virtual void SettingsChangedExternally() { Render(); }
 
         // ---- free resize ----
         enum Corner { None, TopLeft, TopRight, BottomLeft, BottomRight }

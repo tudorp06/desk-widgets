@@ -49,6 +49,12 @@ namespace DeskWidgets
         static int SidebarNarrow { get { return Px(58); } }
         SidebarItem startupToggle, highPriorityToggle, pixelShiftToggle;
         Label settingsAppearanceLabel, settingsBackupLabel;
+        Label settingsArrangeLabel, settingsProfilesLabel;
+        SidebarItem arrangeCorner;
+        PillButton tidyNow, shuffleNow;
+        // One row per profile, rebuilt whenever the list changes.
+        readonly List<SidebarItem> profileItems = new List<SidebarItem>();
+        PillButton profileNew, profileDuplicate, profileRename, profileDelete;
         PillButton backupExport, backupRestore;
         SidebarItem[] themeItems;
         Label updateLabel, updateStatus;
@@ -324,6 +330,16 @@ namespace DeskWidgets
             updateStatus.Visible = settingsOpen && updateStatus.Visible;
             updateInstall.Visible = settingsOpen && updateInstall.Visible;
             uninstallButton.Visible = settingsOpen;
+            settingsArrangeLabel.Visible = settingsOpen;
+            arrangeCorner.Visible = settingsOpen;
+            tidyNow.Visible = settingsOpen;
+            shuffleNow.Visible = settingsOpen;
+            settingsProfilesLabel.Visible = settingsOpen;
+            profileNew.Visible = settingsOpen;
+            profileDuplicate.Visible = settingsOpen;
+            profileRename.Visible = settingsOpen;
+            profileDelete.Visible = settingsOpen && profileItems.Count > 1;
+            foreach (var row in profileItems) row.Visible = settingsOpen;
             foreach (var t in themeItems) t.Visible = settingsOpen;
             if (settingsOpen) y = LayoutSettings(pad, width, y);
 
@@ -468,6 +484,58 @@ namespace DeskWidgets
                 themeItems[i] = item;
             }
 
+            settingsArrangeLabel = new Label { Text = "Arrange", Font = Theme.CaptionEmphasized, ForeColor = Theme.Label2, AutoSize = true };
+            content.Controls.Add(settingsArrangeLabel);
+
+            arrangeCorner = new SidebarItem('\0', "Widget Area") { Subtitle = AreaSubtitle() };
+            arrangeCorner.Click += delegate
+            {
+                var menu = new PopupMenu();
+                menu.Add("Draw Area on Desktop…", delegate
+                {
+                    WindowState = FormWindowState.Minimized; // the area is drawn on the desktop
+                    Arrange.EnterAndSetArea();
+                });
+                if (Screen.AllScreens.Any(WidgetArea.IsCustom))
+                    menu.Add("Use Whole Screen", delegate
+                    {
+                        foreach (var s in Screen.AllScreens) WidgetArea.Clear(s);
+                        arrangeCorner.Subtitle = AreaSubtitle();
+                        arrangeCorner.Invalidate();
+                    });
+                menu.Show(Cursor.Position);
+            };
+            content.Controls.Add(arrangeCorner);
+
+            tidyNow = new PillButton("Tidy Up Now", ButtonStyle.Grey);
+            tidyNow.Click += delegate { WidgetLayout.TidyAll(false); };
+            content.Controls.Add(tidyNow);
+
+            shuffleNow = new PillButton("Shuffle", ButtonStyle.Grey);
+            shuffleNow.Click += delegate { WidgetLayout.TidyAll(true); };
+            content.Controls.Add(shuffleNow);
+
+            settingsProfilesLabel = new Label { Text = "Profiles", Font = Theme.CaptionEmphasized, ForeColor = Theme.Label2, AutoSize = true };
+            content.Controls.Add(settingsProfilesLabel);
+
+            profileNew = new PillButton("New Profile…", ButtonStyle.Grey);
+            profileNew.Click += delegate { NewProfile(false); };
+            content.Controls.Add(profileNew);
+
+            profileDuplicate = new PillButton("Duplicate", ButtonStyle.Grey);
+            profileDuplicate.Click += delegate { NewProfile(true); };
+            content.Controls.Add(profileDuplicate);
+
+            profileRename = new PillButton("Rename…", ButtonStyle.Grey);
+            profileRename.Click += delegate { RenameProfile(); };
+            content.Controls.Add(profileRename);
+
+            profileDelete = new PillButton("Delete", ButtonStyle.Destructive);
+            profileDelete.Click += delegate { DeleteProfile(); };
+            content.Controls.Add(profileDelete);
+
+            RebuildProfileRows();
+
             updateLabel = new Label { Text = App.IsPackaged ? "Updates come from the Microsoft Store" : "Check for Updates",
                 Font = Theme.Body, ForeColor = Theme.Label, AutoSize = true };
             content.Controls.Add(updateLabel);
@@ -519,6 +587,126 @@ namespace DeskWidgets
             content.Controls.Add(uninstallButton);
         }
 
+        static string AreaSubtitle()
+        {
+            int set = Screen.AllScreens.Count(WidgetArea.IsCustom);
+            if (set == 0) return "Tidy Up uses the whole screen";
+            if (Screen.AllScreens.Length == 1) return "Tidy Up stays inside the area you drew";
+            return "Drawn on " + set + " of " + Screen.AllScreens.Length + " screens";
+        }
+
+        // ---- Profiles ----
+
+        // The rows are the list, so they are thrown away and made again whenever it changes.
+        void RebuildProfileRows()
+        {
+            foreach (var row in profileItems) { content.Controls.Remove(row); row.Dispose(); }
+            profileItems.Clear();
+
+            string active = Profiles.Active;
+            foreach (string name in Profiles.Names)
+            {
+                string n = name;
+                bool on = n == active;
+                int count = CountInProfile(n);
+                var row = new SidebarItem(on ? '' : '\0', n)
+                {
+                    Selected = on,
+                    Subtitle = count == 1 ? "1 widget" : count + " widgets"
+                };
+                row.Click += delegate
+                {
+                    if (n == Profiles.Active) return;
+                    Profiles.SwitchTo(n);
+                    RebuildProfileRows();
+                    LayoutContent();
+                };
+                content.Controls.Add(row);
+                profileItems.Add(row);
+            }
+            // Nothing to delete while there is only one profile; hidden rather than dimmed (§17.4).
+            if (profileDelete != null) profileDelete.Visible = page == SettingsPage && profileItems.Count > 1;
+        }
+
+        static int CountInProfile(string name)
+        {
+            if (App.Current == null) return 0;
+            return App.Current.Store.Sections.Count(s => s.Type.Length > 0 && Profiles.Of(s) == name);
+        }
+
+        void NewProfile(bool copyCurrent)
+        {
+            string hint = copyCurrent
+                ? "The widgets on your desktop now are copied into the new profile."
+                : "A new profile starts with an empty desktop. Your current one is kept.";
+            string suggestion = copyCurrent ? NextCopyName() : NextNewName();
+
+            while (true)
+            {
+                string[] answer = InputDialog.Ask(copyCurrent ? "Duplicate Profile" : "New Profile", hint,
+                    new[] { new InputDialog.Field { Label = "Name", Value = suggestion } }, "Create");
+                if (answer == null) return;
+                string name = answer[0].Trim();
+                string problem = Profiles.Validate(name);
+                if (problem != null) { AlertDialog.Show("Can't Use That Name", problem); suggestion = name; continue; }
+                if (copyCurrent) Profiles.Duplicate(name); else Profiles.Create(name);
+                RebuildProfileRows();
+                LayoutContent();
+                Toast.Show("Switched to " + name, copyCurrent ? "A copy of your desktop." : "An empty desktop to fill.");
+                return;
+            }
+        }
+
+        static string NextNewName()
+        {
+            for (int i = 2; ; i++)
+            {
+                string candidate = "Profile " + i;
+                if (!Profiles.Exists(candidate)) return candidate;
+            }
+        }
+
+        static string NextCopyName()
+        {
+            string baseName = Profiles.Active + " Copy";
+            if (!Profiles.Exists(baseName)) return baseName;
+            for (int i = 2; ; i++)
+                if (!Profiles.Exists(baseName + " " + i)) return baseName + " " + i;
+        }
+
+        void RenameProfile()
+        {
+            string from = Profiles.Active;
+            while (true)
+            {
+                string[] answer = InputDialog.Ask("Rename Profile", "The widgets in it don't change.",
+                    new[] { new InputDialog.Field { Label = "Name", Value = from } }, "Rename");
+                if (answer == null) return;
+                string to = answer[0].Trim();
+                if (to == from) return;
+                string problem = Profiles.Validate(to);
+                if (problem != null) { AlertDialog.Show("Can't Use That Name", problem); continue; }
+                Profiles.Rename(from, to);
+                RebuildProfileRows();
+                LayoutContent();
+                return;
+            }
+        }
+
+        void DeleteProfile()
+        {
+            string name = Profiles.Active;
+            if (Profiles.Names.Count < 2) return;
+            int count = CountInProfile(name);
+            string what = count == 0 ? "It has no widgets in it."
+                : count == 1 ? "Its widget and its settings will be removed."
+                : "Its " + count + " widgets and their settings will be removed.";
+            if (!AlertDialog.Confirm("Delete “" + name + "”?", what, "Delete")) return;
+            Profiles.Delete(name);
+            RebuildProfileRows();
+            LayoutContent();
+        }
+
         int LayoutSettings(int pad, int width, int y)
         {
             int rowW = Math.Min(width, Px(500));
@@ -538,6 +726,28 @@ namespace DeskWidgets
                 y += Px(46);
             }
             y += Px(24);
+
+            settingsArrangeLabel.Location = new Point(pad, y);
+            y += settingsArrangeLabel.Height + Px(8);
+            arrangeCorner.SetBounds(pad, y, rowW, Px(52));
+            y += Px(52) + Px(12);
+            tidyNow.Location = new Point(pad, y);
+            shuffleNow.Location = new Point(tidyNow.Right + Px(8), y);
+            y += tidyNow.Height + Px(24);
+
+            settingsProfilesLabel.Location = new Point(pad, y);
+            y += settingsProfilesLabel.Height + Px(8);
+            foreach (var row in profileItems)
+            {
+                row.SetBounds(pad, y, rowW, Px(46));
+                y += Px(46);
+            }
+            y += Px(12);
+            profileNew.Location = new Point(pad, y);
+            profileDuplicate.Location = new Point(profileNew.Right + Px(8), y);
+            profileRename.Location = new Point(profileDuplicate.Right + Px(8), y);
+            profileDelete.Location = new Point(profileRename.Right + Px(8), y);
+            y += profileNew.Height + Px(24);
 
             int midY = y + (Px(32) - updateLabel.Height) / 2;
             updateLabel.Location = new Point(pad, midY);
