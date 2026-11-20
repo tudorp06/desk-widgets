@@ -9,6 +9,13 @@ name: Website
 # its pull request is merged.
 #
 # Needs Settings > Pages > Source set to "GitHub Actions".
+#
+# Why two jobs instead of one: GitHub's artifact list is not readable the instant the upload
+# finishes, and deploy-pages asks for it straight away, so in one job it reads back "Found 0
+# artifact(s)" and fails. The job boundary gives the upload time to appear. It also means
+# "Re-run failed jobs" re-runs the deploy alone and reuses the artifact already on the run;
+# re-running the upload would leave two artifacts named github-pages on it, which deploy-pages
+# refuses with "Multiple artifacts named github-pages".
 
 on:
   push:
@@ -26,12 +33,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish the website
+  build:
+    name: Build the website
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       # The whole history: a widget's date in the gallery is the commit that last changed it.
       - uses: actions/checkout@v7
@@ -46,5 +50,14 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs
+
+  publish:
+    name: Publish the website
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - uses: actions/deploy-pages@v5
         id: deploy
