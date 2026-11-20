@@ -1,0 +1,7 @@
+{
+  "name": "habits",
+  "category": "clocks",
+  "description": "Track habits",
+  "api_version": 3,
+  "version": 1
+}
