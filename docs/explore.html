@@ -57,7 +57,7 @@
   </main>
 
   <script type="module">
-    import { nav, el, avatar, categoryName, categoryIcon, notice, widgetCard as card, personCard } from "./assets/site.js";
+    import { nav, el, avatar, categoryName, categoryIcon, notice, widgetCard as card, personCard, previewImg } from "./assets/site.js";
     import { getWidgets, getProfiles, getPreviews } from "./assets/data.js";
 
     nav("explore");
@@ -176,7 +176,7 @@
           const preview = map.get(id);
           const w = widgets.find(w => w.id === id);
           artEl.className = "art";
-          if (preview) artEl.replaceChildren(el("img", { src: preview, alt: (w ? w.name : id) + " preview" }));
+          if (preview) artEl.replaceChildren(previewImg(preview, w ? w.name : id));
           else artEl.replaceChildren(categoryIcon(w ? w.category : null));
         }
       } catch {

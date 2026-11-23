@@ -226,7 +226,20 @@ export function personCard(profile, count) {
 // A widget's preview as an <img>, or a quiet placeholder. src is what getPreviews (data.js)
 // answers with: the address of the widget's preview.png, or null.
 export function artFrom(src, name, category) {
-  return el("div", { class: "art" }, src ? el("img", { src, alt: name + " preview" }) : categoryIcon(category));
+  return el("div", { class: "art" }, src ? previewImg(src, name) : categoryIcon(category));
+}
+
+// A preview is the widget's own pixel size: 170x170 for a small widget, 364x170 or 364x382 for
+// the bigger ones. A card's art box is square, so a square preview fills it and a small widget
+// reads as the largest thing in the grid. Mark the square ones; the card CSS holds them to a
+// small widget's share of the card.
+export function previewImg(src, name) {
+  const img = el("img", { src, alt: name + " preview" });
+  const mark = function () {
+    if (img.naturalWidth && img.naturalWidth === img.naturalHeight) img.classList.add("sq");
+  };
+  if (img.complete) mark(); else img.addEventListener("load", mark, { once: true });
+  return img;
 }
 
 // Opens Desk Widgets on this PC; it re-checks everything and always asks before installing.
