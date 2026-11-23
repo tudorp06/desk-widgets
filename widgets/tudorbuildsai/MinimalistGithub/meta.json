@@ -1,0 +1,7 @@
+{
+  "name": "Minimalist GitHub",
+  "category": "developer",
+  "description": "GitHub contribution heatmap in blue color, with profile stats, caching, and PAT or gh CLI sign-in. This is another adaptation of the Github profile widget, different than the existing one",
+  "api_version": 1,
+  "version": 1
+}
