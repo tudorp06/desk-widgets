@@ -118,6 +118,9 @@ img { display: block; max-width: 100%; }
 .tile:hover { text-decoration: none; }
 .art { aspect-ratio: 1 / 1; border-radius: var(--r-card); background: var(--card); display: grid; place-items: center; overflow: hidden; }
 .art img { width: 92%; height: 92%; object-fit: contain; }
+/* A small widget's preview is square like the art box, so "contain" fills it and a 170 pt widget
+   reads as the biggest thing on the page. It takes a small widget's share (site.js marks them). */
+.art img.sq { width: 65%; height: 65%; }
 .art .none { color: var(--text-2); font: 400 14px var(--font-text); }
 .cat-ico { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round;
   stroke-linejoin: round; color: var(--text-2); }
