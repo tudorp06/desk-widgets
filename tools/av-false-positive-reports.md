@@ -1,47 +1,45 @@
 # Reporting the antivirus false positives
 
-Every release, generic engines flag `DeskWidgets.exe` and `DeskWidgets-Setup.exe`. This is the
-list of who to tell and what to say. It will stay necessary until the binaries are code-signed.
-Issue #141 is the report that prompted it.
+Every release, generic engines flag `DeskWidgets.exe` and `DeskWidgets-Setup.exe`. This is who
+to tell and what to say. It will stay necessary until the binaries are code-signed. Issue #141 is
+the report that prompted it.
 
-Verify a URL before using it — these move. VirusTotal keeps the canonical directory of vendor
-contacts at <https://docs.virustotal.com/docs/false-positive-contacts>; prefer it over the links
-below if they disagree.
+Verify a URL before using it — these move.
 
-## Who actually needs telling
+## Where it stands
 
-A VirusTotal row count is not a vendor count. Most of the names resell someone else's engine, so
-one report clears several rows:
+Measured on v1.10.1, the first build with a real version resource (#142). Both files sit at
+**11 of 70**, down from 20/70 (`DeskWidgets.exe`) and 16/64 (`DeskWidgets-Setup.exe`) on v1.10.0.
 
-| Report to | Clears |
+On *both* files, 8 of the 11 are a single engine — Bitdefender's `Gen:Variant.MSILHeracles.278397`,
+resold under ALYac, Arcabit, CTX, Emsisoft, eScan, GData and VIPRE. A VirusTotal row count is
+never a vendor count.
+
+The remaining three differ per file and are not worth chasing:
+
+| | not Bitdefender |
 |---|---|
-| **Bitdefender** | Bitdefender, ALYac, Arcabit, CTX, Emsisoft, eScan, GData, VIPRE — 8 rows |
-| **TrendMicro** | TrendMicro, TrendMicro-HouseCall |
-| **Trellix** | Trellix ENS, McAfee Scanner |
-| Microsoft | Microsoft (`Trojan:Win32/Wacatac.B!ml`) — also the SmartScreen path |
-| Sophos | Sophos (`Mal/Generic-S`) |
-| Broadcom/Symantec | Symantec (`ML.Attribute.HighConfidence`, `Trojan.MsilHrcls!ATN`) |
-| Palo Alto Networks | Palo Alto (`Generic.ml`) |
-| Elastic, DeepInstinct, SecureAge, Lionic, Antiy, Trapmine, Acronis | one row each; do these last |
+| `DeskWidgets.exe` | McAfee `Ti!4FF57891E08E`, SecureAge, Trapmine |
+| `DeskWidgets-Setup.exe` | Arctic Wolf, DeepInstinct, Skyhigh (SWG) |
 
-Start with Bitdefender. It is a third of the score on its own.
+McAfee's is not analysis: `Ti!` is their trust index and the suffix is the first 12 hex digits of
+the file's own SHA-256, so it means "never seen this file" and clears as downloads accumulate.
+v1.10.0 carried the same shape (`Ti!10A49AAAAB1E`, that build's hash prefix).
 
-## Where
+## Who to tell
 
-- **Bitdefender** — <https://www.bitdefender.com/submit> (if that form misbehaves, the business
-  one reaches the same lab: <https://www.bitdefender.com/business/submit>)
-- **Microsoft** — <https://www.microsoft.com/wdsi/filesubmission?persona=SoftwareDeveloper>.
-  Choose "Incorrect detection" and give the detection name. Expect slow, sometimes silent, handling.
-- **TrendMicro** — <https://www.trendmicro.com/en_us/about/legal/detection-reevaluation.html>.
-  Zip the file first; 12 MB limit; password-protect the archive and put the password in the
-  details field.
-- **Sophos** — submit through Sophos Intelix, or the sample submission form. Allow ~15 days.
-- **Broadcom/Symantec** — <https://symsubmit.symantec.com>, the "Clean Software Incorrectly
-  Detected" tile. No support case needed.
-- **Palo Alto Networks** — report the verdict through the WildFire portal for your region. No
-  support case needed.
-- **Trellix** — check Trellix's current support site; the old McAfee submission page is gone.
-- **Elastic** — raise it on `elastic/protections-artifacts` on GitHub.
+**Bitdefender, and stop.** <https://www.bitdefender.com/submit> — if that form misbehaves, the
+business one reaches the same lab: <https://www.bitdefender.com/business/submit>. Detection name
+`Gen:Variant.MSILHeracles.278397`. One report, both files, 8 of 11 rows on each.
+
+Do not file with anyone else. Microsoft, TrendMicro, Trellix, Sophos, Broadcom/Symantec, Palo
+Alto, Elastic, Antiy and Lionic all flagged v1.10.0 and all read clean on v1.10.1 — Microsoft's
+`Trojan:Win32/Wacatac.B!ml` among them, which is the SmartScreen path too. Reporting a file a lab
+already passes wastes their time and yours.
+
+If a later release is flagged more widely again, the old contact list is in the history of this
+file, and VirusTotal keeps the canonical directory at
+<https://docs.virustotal.com/docs/false-positive-contacts>.
 
 ## What to send
 
@@ -95,7 +93,15 @@ see it in the sandbox anyway.
 >
 > Thank you for taking a look.
 
-## After
+## After, and for the next release
 
-Re-scan on VirusTotal a week later and note what moved. Every new release needs the round again
-until there is a signing certificate — which is the only thing that fixes this properly.
+Re-scan both files about a week later and note what moved. A freshly uploaded file has no
+prevalence data and some cloud verdicts firm up over days, so the score on release day is not yet
+the real one.
+
+Then do the same on the next release: scan first, and report only to whoever is still flagging.
+The list shrank from seven labs to one between v1.10.0 and v1.10.1 without a single report being
+filed, so start from what the scan says rather than from this file.
+
+None of this is a fix. A signing certificate is, and until there is one the Bitdefender family
+will likely need telling again each release.
