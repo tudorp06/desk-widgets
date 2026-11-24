@@ -36,6 +36,10 @@
     <p class="dl-other">Don&rsquo;t want to install anything? <a id="portable" href="#">Download the single .exe</a>
       and run it from any folder.</p>
     <p class="dl-other"><a class="more" id="notes" href="#">What&rsquo;s new in this version</a></p>
+    <!-- The downloads aren't code-signed, so some antivirus engines flag them generically.
+         Saying so here is better than letting people find out from a red banner. -->
+    <p class="dl-other">The two downloads aren&rsquo;t code-signed yet, so some antivirus tools flag them.
+      <a class="more" id="falsepositives" href="#">Why that happens, and what you can check</a></p>
   </main>
 
   <script type="module">
@@ -45,6 +49,7 @@
     document.getElementById("store").href = STORE_URL;
     document.getElementById("portable").href = DOWNLOAD_URL;
     document.getElementById("notes").href = RELEASES_URL;
+    document.getElementById("falsepositives").href = REPO_URL + "/blob/main/SECURITY.md#antivirus-false-positives";
 
     // The release's own tag and installer size, from the API the app's updater already uses
     // (src/AppUpdater.cs). If it can't be read, the line keeps the file name alone.

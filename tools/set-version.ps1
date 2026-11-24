@@ -1,4 +1,4 @@
-# set-version.ps1 - the one version the whole project ships with, written to all three files.
+﻿# set-version.ps1 - the one version the whole project ships with, written to all three files.
 #
 #   tools\set-version.ps1 1.8.8          set the version
 #   tools\set-version.ps1 -Check         report what the three files say, and disagree loudly
@@ -19,7 +19,10 @@ $root = Split-Path $PSScriptRoot -Parent
 $targets = @(
     @{ Path = "packaging\AppxManifest.xml"; Pattern = '(?<=<Identity Name="[^"]*"\s+Publisher="[^"]*"\s+Version=")(\d+\.\d+\.\d+\.\d+)'; Four = $true },
     @{ Path = "packaging\installer.iss";    Pattern = '(?<=#define MyAppVersion ")(\d+\.\d+\.\d+)';                                     Four = $false },
-    @{ Path = "src\AppUpdater.cs";          Pattern = '(?<=internal const string AppVersion = ")(\d+\.\d+\.\d+)';                       Four = $false }
+    @{ Path = "src\AppUpdater.cs";          Pattern = '(?<=internal const string AppVersion = ")(\d+\.\d+\.\d+)';                       Four = $false },
+    @{ Path = "src\AssemblyInfo.cs";        Pattern = '(?<=\[assembly: AssemblyVersion\(")(\d+\.\d+\.\d+\.\d+)';                   Four = $true },
+    @{ Path = "src\AssemblyInfo.cs";        Pattern = '(?<=\[assembly: AssemblyFileVersion\(")(\d+\.\d+\.\d+\.\d+)';               Four = $true },
+    @{ Path = "src\AssemblyInfo.cs";        Pattern = '(?<=\[assembly: AssemblyInformationalVersion\(")(\d+\.\d+\.\d+)';             Four = $false }
 )
 
 function Read-Version($t) {
@@ -64,7 +67,7 @@ foreach ($t in $targets) {
 
 # With no version given, they still have to agree with each other.
 if (-not $Version) {
-    $three = $targets | ForEach-Object { (Read-Version $_) -replace '\.0$', '' } | Sort-Object -Unique
+    $three = $targets | ForEach-Object { ((Read-Version $_) -split '\.')[0..2] -join '.' } | Sort-Object -Unique
     if ($three.Count -ne 1) { $problems += "the three files disagree: $($three -join ', ')" }
 }
 
