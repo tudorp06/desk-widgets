@@ -1,7 +1,7 @@
 {
   "name": "Headlines",
   "category": "news",
-  "description": "Headlines",
+  "description": "Read the newest stories from any RSS feed you choose",
   "api_version": 3,
   "version": 1
 }
