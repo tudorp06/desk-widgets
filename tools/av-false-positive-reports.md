@@ -51,14 +51,20 @@ Attach both files from the release — not a local build, or the hashes won't ma
 https://github.com/whoissaaif/desk-widgets/releases/latest
 ```
 
-v1.10.0 hashes, for the message body:
+v1.10.1 hashes, for the message body:
 
 ```
-4b40850e1d9002662f34be40d5839bafae18da2f4fcc1e9bcb6fbb568027b05d  DeskWidgets.exe
-10a49aaaab1e42d39d926b76083646696bb7bc5df74c56687cb664d0c0aca1a7  DeskWidgets-Setup.exe
+4ff57891e08e61620635192c2f443ac96a5f33cf89e46cf13ee9c7596f40877f  DeskWidgets.exe
+05e2383321dfbef692587599a8cdf12c4c10279aaf1e587df97508aa36072403  DeskWidgets-Setup.exe
 ```
 
 Re-run `sha256sum` on the release assets for any later version; do not copy these forward.
+
+Take the hashes **after** the release is published, not from the draft. Publishing fires
+`release.yml` a second time, which rebuilds from the same tag and replaces all three assets,
+and csc output is not byte-reproducible, so the draft's hashes are not the ones anybody will
+download. (Measured on v1.10.1: the draft exe was `4c881c9a...`, the published one
+`4ff57891...`.)
 
 ## The message
 
