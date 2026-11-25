@@ -1,0 +1,7 @@
+{
+  "name": "Minimalist GitHub",
+  "category": "developer",
+  "description": "Blue GitHub contribution heatmap with profile stats, caching, and PAT or gh CLI sign-in.",
+  "api_version": 1,
+  "version": 1
+}
