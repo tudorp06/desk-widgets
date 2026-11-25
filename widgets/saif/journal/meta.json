@@ -1,7 +1,7 @@
 {
   "name": "Journal",
-  "category": "utility",
-  "description": "Journal",
+  "category": "productivity",
+  "description": "Answer a prompt a day and watch the streak hold",
   "api_version": 3,
   "version": 1
 }

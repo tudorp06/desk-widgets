@@ -1,7 +1,7 @@
 {
-  "name": "habits",
-  "category": "clocks",
-  "description": "Track habits",
+  "name": "Habits",
+  "category": "health",
+  "description": "Tick off a few daily habits and keep the streak in sight",
   "api_version": 3,
   "version": 1
 }
