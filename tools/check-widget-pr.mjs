@@ -65,6 +65,10 @@ for (const path of changed) {
   touchedAuthors.add(author);
   if (parts.length === 3 && second === AUTHOR_FILE) continue;
   if (parts.length === 4 && WIDGET_FILES.includes(third)) { touchedWidgets.add(`${author}/${second}`); continue; }
+  // A file the pull request takes away is fine whatever it was called: the rule is about what a
+  // widget folder is left holding. Without this, a file that should never have been merged can
+  // never be removed, because the removal reads as a change to a file with the wrong name.
+  if (!fileAt(head, path)) continue;
   say(path, `a widget folder holds only ${WIDGET_FILES.join(", ")}, beside one ${AUTHOR_FILE} per author`);
 }
 
